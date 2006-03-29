@@ -1275,7 +1275,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::message( UInt32 type, IOService *provi
 			break;
 			
 		case kIOMessageServiceIsAttemptingOpen:
-			DEBUG_IOLog("%s(%p):: received kIOMessageServiceIsAttemptingOpen with argument: %d \n", (int) argument );
+			DEBUG_IOLog("%s(%p)::received kIOMessageServiceIsAttemptingOpen with argument: %d \n", getName(), this, (int) argument );
 			
 			break;
 			
@@ -3156,7 +3156,7 @@ QueueStatus nl_bjaelectronics_driver_PL2303::AddBytetoQueue( CirQueue *Queue, ch
     /* Check to see if there is space by comparing the next pointer,    */
     /* with the last, If they match we are either Empty or full, so     */
     /* check the InQueue of being zero.                 */
-    DEBUG_IOLog("%s(%p)::AddBytetoQueue\n", getName(), this );
+    DEBUG_IOLog("nl_bjaelectronics_driver_PL2303(%p)::AddBytetoQueue\n", this );
 	
     if ( !(fPort && fPort->serialRequestLock ) ) goto Fail;
     IOLockLock( fPort->serialRequestLock );
