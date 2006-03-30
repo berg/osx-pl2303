@@ -52,7 +52,7 @@ extern "C" {
 #include <pexpert/pexpert.h>
 }
 
-//#define DEBUG
+#define DEBUG
 #ifdef DEBUG
 #define DEBUG_IOLog(args...)	IOLog (args)
 #else
@@ -125,8 +125,7 @@ IOService *nl_bjaelectronics_driver_PL2303::probe(IOService *provider, SInt32 *s
 
 bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
 {
-//	enum pl2303_type type = type_0;
-//    IOUSBDeviceDescriptor	desc;
+    enum pl2303_type type = type_0;
 
     fTerminate = false;     // Make sure we don't think we're being terminated
     fPort = NULL;
@@ -203,21 +202,20 @@ bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
     }
 	
     fCommandGate->enable();	
-/*
-	IOLog("%s(%p)::start - GetMaxPacketSize: %p DeviceClass %p\n", getName(), this, fpDevice->GetMaxPacketSize(), fpInterface->GetInterfaceClass());
-    // I use fpInterface->GetInterfaceClass(), but the linux driver descriptor.bDeviceClass. The descriptor is protected so I can't access it directly. 
-	// Research how to solve it has to be done.
-	if (fpInterface->GetInterfaceClass() == 0x02)
+
+    OSNumber *	deviceClass = (OSNumber *) fpDevice->getProperty(kUSBDeviceClass);
+	DEBUG_IOLog("%s(%p)::start - GetMaxPacketSize: %p DeviceClass %p\n", getName(), this, fpDevice->GetMaxPacketSize(), deviceClass->unsigned8BitValue() );
+	if ( deviceClass->unsigned8BitValue() == 0x02)
 		type = type_0;
 	else if ( fpDevice->GetMaxPacketSize() == 0x40)
 		type = HX;
-	else if (fpInterface->GetInterfaceClass() == 0x00)
+	else if ( deviceClass->unsigned8BitValue() == 0x00)
 		type = type_1;
-	else if (fpInterface->GetInterfaceClass() == 0xFF)
+	else if ( deviceClass->unsigned8BitValue() == 0xFF)
 		type = type_1;
-	IOLog("%s(%p)::start - device type: %d", getName(), this, type);
+	IOLog("%s(%p)::start - device type: %d\n", getName(), this, type);
     fPort->type = type;
-*/
+
 	fUSBStarted = true;  
 	
 	
@@ -1216,7 +1214,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::message( UInt32 type, IOService *provi
 	switch ( type )
     {
 		case kIOMessageServiceIsTerminated:
-			DEBUG_IOLog("%s(%p)::message - kIOMessageServiceIsTerminated sessions: %d\n", getName(), this,fSessions);
+			DEBUG_IOLog("%s(%p)::message - kIOMessageServiceIsTerminated sessions: %p\n", getName(), this,fSessions);
 			
 			if ( fSessions ){
 				stopSerial();         // stop serial now
@@ -1275,7 +1273,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::message( UInt32 type, IOService *provi
 			break;
 			
 		case kIOMessageServiceIsAttemptingOpen:
-			DEBUG_IOLog("%s(%p)::received kIOMessageServiceIsAttemptingOpen with argument: %d \n", getName(), this, (int) argument );
+			DEBUG_IOLog("%s(%p)::received kIOMessageServiceIsAttemptingOpen with argument: %p \n", getName(), this, (int) argument );
 			
 			break;
 			
