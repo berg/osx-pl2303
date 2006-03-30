@@ -30,9 +30,21 @@
  *
  * Todo:
  * - Implementation Powermanagement
- * - Implementation Flow-Control
- * - Fix Could not open device bug
+ * - Implementation Flow-Control/Handshake
+ * - Fix USBF: Could not open device: Strange error message
  * - Some small bugs
+ *
+ *
+ *
+ * The Linux Driver contains the following code in open():
+ * 	if (priv->type != HX) {
+ *		usb_clear_halt(serial->dev, port->write_urb->pipe);
+ *		usb_clear_halt(serial->dev, port->read_urb->pipe);
+ *	}
+ *
+ * This driver does not implement this clear_halt: The driver initialise the pipes when
+ * the device is opened from a client. I assume that the pipe is clean and contains
+ * no halt. I did not have the HX chip. I could not test this case.
  *
  * http://www.usb.org/developers/devclass_docs/usbcdc11.pdf
  */
@@ -583,17 +595,22 @@ void nl_bjaelectronics_driver_PL2303::releaseResources( void )
 //
 bool nl_bjaelectronics_driver_PL2303::startSerial()
 {
-//	IOUSBDevRequest request;
-	char buf[10];	
-//	IOReturn rtn;
+	IOUSBDevRequest request;
+	char * buf;	
+	IOReturn rtn;
 	DEBUG_IOLog("%s(%p)::startSerial \n", getName(), this);
-	memset(buf, 0x00, 0x07); //WARNING IS THIS ALLOWED IN KERNEL SPACE ?
+	
+	buf = (char *) IOMalloc(10);
+    if (!buf) {
+		IOLog("%s(%p)::startSerial could not alloc memory for buf\n", getName(), this);
+		goto	Fail;
+	}
 
     if (!fNub) {
 		IOLog("%s(%p)::startSerial fNub not available\n", getName(), this);
 		goto	Fail;
 	}
-/*
+
     // make chip as sane as can be
 #define FISH(a,b,c,d)								\
 	request.bmRequestType = a; \
@@ -603,7 +620,7 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	request.wLength = 1; \
 	request.pData = buf; \
 	rtn =  fpDevice->DeviceRequest(&request); \
-	IOLog("%s(%p)::startSerial FISH 0x%x:0x%x:0x%x:0x%x  %d - %x\n", getName(), this,a,b,c,d,rtn,buf[0]);
+	DEBUG_IOLog("%s(%p)::startSerial FISH 0x%x:0x%x:0x%x:0x%x  %d - %x\n", getName(), this,a,b,c,d,rtn,buf[0]);
 
 #define SOUP(a,b,c,d)								\
 	request.bmRequestType = a; \
@@ -613,7 +630,7 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	request.wLength = 0; \
 	request.pData = NULL; \
 	rtn =  fpDevice->DeviceRequest(&request); \
-	IOLog("%s(%p)::startSerial SOUP 0x%x:0x%x:0x%x:0x%x  %d\n", getName(), this,a,b,c,d,rtn);
+	DEBUG_IOLog("%s(%p)::startSerial SOUP 0x%x:0x%x:0x%x:0x%x  %d\n", getName(), this,a,b,c,d,rtn);
 
 
 	FISH (VENDOR_READ_REQUEST_TYPE, VENDOR_READ_REQUEST, 0x8484, 0);
@@ -624,20 +641,21 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 0x0404, 1);
 	FISH (VENDOR_READ_REQUEST_TYPE, VENDOR_READ_REQUEST, 0x8484, 0);
 	FISH (VENDOR_READ_REQUEST_TYPE, VENDOR_READ_REQUEST, 0x8383, 0);
-	FISH (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 0x81, 1);
+//	FISH (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 0x81, 1);
 	SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 0, 1);
 	SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 1, 0);
-*/
-/*	if (fPort->type == HX) { */
+
+	if (fPort->type == HX) { 
 		/* HX chip */
-/*		SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 2, 0x44); */
+		SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 2, 0x44); 
 		/* reset upstream data pipes */
-/*          	SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 8, 0);
+         	SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 8, 0);
         	SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 9, 0);
 	} else {
 		SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 2, 0x24);
 	}
-*/	
+	
+    IOFree(buf, 10);
 //	request.bmRequestType = USBmakebmRequestType(kUSBOut, kUSBClass, kUSBInterface);
 //    request.bRequest = SET_LINE_REQUEST;
 //	request.wValue =  0; 
