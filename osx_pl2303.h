@@ -321,25 +321,25 @@ public:
     virtual unsigned long initialPowerStateForDomainState ( IOPMPowerFlags );
     virtual IOReturn    setPowerState(unsigned long powerStateOrdinal, IOService * whatDevice);
 	
-	bool				SetUpTransmit( void );
-	IOReturn			SetSerialConfiguration( void );
-    IOReturn			StartTransmit( UInt32 control_length, UInt8 *control_buffer, UInt32 data_length, UInt8 *data_buffer );
+	bool				setUpTransmit( void );
+	IOReturn			setSerialConfiguration( void );
+    IOReturn			startTransmit( UInt32 control_length, UInt8 *control_buffer, UInt32 data_length, UInt8 *data_buffer );
 	
 	
 private:
 
 	/**** Queue primatives ****/
     
-    QueueStatus     AddBytetoQueue( CirQueue *Queue, char Value );
-    QueueStatus     GetBytetoQueue( CirQueue *Queue, UInt8 *Value );
-    QueueStatus     InitQueue( CirQueue *Queue, UInt8 *Buffer, size_t Size );
-    QueueStatus     CloseQueue( CirQueue *Queue );
-    size_t          AddtoQueue( CirQueue *Queue, UInt8 *Buffer, size_t Size );
-    size_t          RemovefromQueue( CirQueue *Queue, UInt8 *Buffer, size_t MaxSize );
-    size_t          FreeSpaceinQueue( CirQueue *Queue );
-    size_t          UsedSpaceinQueue( CirQueue *Queue );
-    size_t          GetQueueSize( CirQueue *Queue );
-    void            CheckQueues( PortInfo_t *port );
+    QueueStatus     addBytetoQueue( CirQueue *Queue, char Value );
+    QueueStatus     getBytetoQueue( CirQueue *Queue, UInt8 *Value );
+    QueueStatus     initQueue( CirQueue *Queue, UInt8 *Buffer, size_t Size );
+    QueueStatus     closeQueue( CirQueue *Queue );
+    size_t          addtoQueue( CirQueue *Queue, UInt8 *Buffer, size_t Size );
+    size_t          removefromQueue( CirQueue *Queue, UInt8 *Buffer, size_t MaxSize );
+    size_t          freeSpaceinQueue( CirQueue *Queue );
+    size_t          usedSpaceinQueue( CirQueue *Queue );
+    size_t          getQueueSize( CirQueue *Queue );
+    void            checkQueues( PortInfo_t *port );
 
 	/**** State manipulations ****/
     
@@ -349,7 +349,7 @@ private:
     IOReturn        CheckSerialState();       // combines fSessions, fStartStopUserClient, fStartStopUSB to new state
 	/**** USB Specific ****/
     
-    virtual bool            configureDevice( UInt8 numConfigs );
+    virtual bool    configureDevice( UInt8 numConfigs );
     void            Workaround();                               // reset confused silicon
     
     bool            allocateResources( void );                  // allocate pipes
@@ -367,6 +367,7 @@ private:
     bool            allocateRingBuffer( CirQueue *Queue, size_t BufferSize );
     void            freeRingBuffer( CirQueue *Queue );
 
-
+    /**** FlowControl ****/
+	IOReturn        setControlLines( PortInfo_t *port, UInt32 state );
 
 };

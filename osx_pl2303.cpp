@@ -532,11 +532,15 @@ bool nl_bjaelectronics_driver_PL2303::allocateResources( void )
     fWriteCompletionInfo.action = dataWriteComplete;
     fWriteCompletionInfo.parameter  = fPort;
 	
-	if( SetSerialConfiguration() ){
-		IOLog("%s(%p)::allocateResources SetSerialConfiguration failed\n", getName(), this);
+	if( setSerialConfiguration() ){
+		IOLog("%s(%p)::allocateResources setSerialConfiguration failed\n", getName(), this);
 		goto Fail;
 	}
-	
+	if( setControlLines( fPort, 0x00) ){
+		IOLog("%s(%p)::allocateResources setControlLines failed\n", getName(), this);
+		goto Fail;
+	}
+		
     DEBUG_IOLog("%s(%p)::allocateResources successful\n", getName(), this);
     return true;
 	
@@ -856,8 +860,7 @@ Fail:
 //              create serial stream finishes the job later.
 //
 /****************************************************************************************************/
-bool
-nl_bjaelectronics_driver_PL2303::createNub(void)
+bool nl_bjaelectronics_driver_PL2303::createNub(void)
 {
     DEBUG_IOLog("%s(%p)::createNub\n", getName(), this);
 
@@ -1988,7 +1991,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 					changeState( port, 0, (UInt32)PD_S_ACTIVE );
 				}
 			}
-			if( SetSerialConfiguration() ){
+			if( setSerialConfiguration() ){
 				DEBUG_IOLog("%s(%p)::executeEvent Set Serial Configuration failed\n", getName(), this);
 			}
 			break;
@@ -2014,7 +2017,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 				port->TX_Parity = data;
 				port->RX_Parity = PD_RS232_PARITY_DEFAULT;          
 			}
-			if( SetSerialConfiguration() ){
+			if( setSerialConfiguration() ){
 				DEBUG_IOLog("%s(%p)::executeEvent Set Serial Configuration failed\n", getName(), this);
 			}
 			break;
@@ -2030,7 +2033,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 			{
 				port->BaudRate = data;
 			}       
-				if( SetSerialConfiguration() ){
+				if( setSerialConfiguration() ){
 					DEBUG_IOLog("%s(%p)::executeEvent Set Serial Configuration failed\n", getName(), this);
 				}
 				break;
@@ -2047,7 +2050,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 				
 				port->CharLength = data;            
 			}
-				if( SetSerialConfiguration() ){
+				if( setSerialConfiguration() ){
 					DEBUG_IOLog("%s(%p)::executeEvent Set Serial Configuration failed\n", getName(), this);
 				}
 				break;
@@ -2060,7 +2063,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 			{
 				port->StopBits = data;
 			}
-				if( SetSerialConfiguration() ){
+				if( setSerialConfiguration() ){
 					DEBUG_IOLog("%s(%p)::executeEvent Set Serial Configuration failed\n", getName(), this);
 				}
 				break;
@@ -2244,12 +2247,12 @@ IOReturn nl_bjaelectronics_driver_PL2303::requestEventGated( UInt32 event, UInt3
 				
 			case PD_E_TXQ_SIZE:
 				DEBUG_IOLog("%s(%p)::requestEvent - PD_E_TXQ_SIZE\n", getName(), this);
-				*data = GetQueueSize( &port->TX );  
+				*data = getQueueSize( &port->TX );  
 				break;
 				
 			case PD_E_RXQ_SIZE:
 				DEBUG_IOLog("%s(%p)::requestEvent - PD_E_RXQ_SIZE\n", getName(), this);
-				*data = GetQueueSize( &port->RX );  
+				*data = getQueueSize( &port->RX );  
 				break;
 				
 			case PD_E_TXQ_LOW_WATER:
@@ -2277,13 +2280,13 @@ IOReturn nl_bjaelectronics_driver_PL2303::requestEventGated( UInt32 event, UInt3
 				break;
 				
 			case PD_E_TXQ_AVAILABLE:
-				*data = FreeSpaceinQueue( &port->TX );   
+				*data = freeSpaceinQueue( &port->TX );   
 				DEBUG_IOLog("%s(%p)::requestEvent - PD_E_TXQ_AVAILABLE size: %x\n", getName(), this, *data );
 				break;
 				
 			case PD_E_RXQ_AVAILABLE:
 				DEBUG_IOLog("%s(%p)::requestEvent - PD_E_RXQ_AVAILABLE\n", getName(), this);
-				*data = UsedSpaceinQueue( &port->RX );  
+				*data = usedSpaceinQueue( &port->RX );  
 				break;
 				
 			case PD_E_DATA_RATE:
@@ -2511,11 +2514,11 @@ IOReturn nl_bjaelectronics_driver_PL2303::enqueueDataGated( UInt8 *buffer, UInt3
 	}
     	
 	/* OK, go ahead and try to add something to the buffer  */
-    *count = AddtoQueue( &fPort->TX, buffer, size );
-    CheckQueues( fPort );
+    *count = addtoQueue( &fPort->TX, buffer, size );
+    checkQueues( fPort );
 	
 	/* Let the tranmitter know that we have something ready to go   */
-    SetUpTransmit( );
+    setUpTransmit( );
 	
 	/* If we could not queue up all of the data on the first pass and   */
 	/* the user wants us to sleep until it's all out then sleep */
@@ -2530,12 +2533,12 @@ IOReturn nl_bjaelectronics_driver_PL2303::enqueueDataGated( UInt8 *buffer, UInt3
 			return rtn;
 		}
 		
-		*count += AddtoQueue( &fPort->TX, buffer + *count, size - *count );
-		CheckQueues( fPort );
+		*count += addtoQueue( &fPort->TX, buffer + *count, size - *count );
+		checkQueues( fPort );
 		
 		/* Let the tranmitter know that we have something ready to go.  */
 		
-		SetUpTransmit( );
+		setUpTransmit( );
 	}/* end while */
 
     DEBUG_IOLog("%s(%p)::enqueueDataGateda - Enqueue\n", getName(), this);
@@ -2638,9 +2641,9 @@ IOReturn nl_bjaelectronics_driver_PL2303::dequeueDataAction(OSObject *owner, voi
 		 return kIOReturnNotOpen;
 	 
 	 /* Get any data living in the queue.    */
-	 *count = RemovefromQueue( &fPort->RX, buffer, size );
+	 *count = removefromQueue( &fPort->RX, buffer, size );
 	 
-	 CheckQueues( fPort );
+	 checkQueues( fPort );
 	 while ( (min > 0) && (*count < min) )	
 	 {
 		 int count_read;
@@ -2659,10 +2662,10 @@ IOReturn nl_bjaelectronics_driver_PL2303::dequeueDataAction(OSObject *owner, voi
 			 return rtn;
 		 }
 		 /* Try and get more data starting from where we left off */
-		 count_read = RemovefromQueue( &fPort->RX, buffer + *count, (size - *count) );
+		 count_read = removefromQueue( &fPort->RX, buffer + *count, (size - *count) );
 		 
 		 *count += count_read;
-		 CheckQueues( fPort );
+		 checkQueues( fPort );
 		 
 	 }/* end while */
 
@@ -2692,7 +2695,7 @@ UInt32 nl_bjaelectronics_driver_PL2303::getState(void *refCon)
 	PortInfo_t  *port = (PortInfo_t *) refCon;
     UInt32      state;
     
-    CheckQueues( port );
+    checkQueues( port );
 	
     state = readPortState( port ) & EXTERNAL_MASK;
     
@@ -2720,7 +2723,7 @@ UInt32 nl_bjaelectronics_driver_PL2303::getState(void *refCon)
 //
 /****************************************************************************************************/
 
-IOReturn nl_bjaelectronics_driver_PL2303::StartTransmit(UInt32 control_length, UInt8 *control_buffer, UInt32 data_length, UInt8 *data_buffer)
+IOReturn nl_bjaelectronics_driver_PL2303::startTransmit(UInt32 control_length, UInt8 *control_buffer, UInt32 data_length, UInt8 *data_buffer)
 {
     IOReturn    ior;
     
@@ -2902,7 +2905,7 @@ void nl_bjaelectronics_driver_PL2303::dataReadComplete( void *obj, void *param, 
 			DATA_IOLog("\n");	
 			IOLockUnlock( me->fPort->serialRequestLock );
 #endif	
-			ior = me->AddtoQueue( &me->fPort->RX, &me->fPipeInBuffer[0], dtlength );
+			ior = me->addtoQueue( &me->fPort->RX, &me->fPipeInBuffer[0], dtlength );
 		}
 		
 		/* Queue the next read 	*/		
@@ -2911,7 +2914,7 @@ void nl_bjaelectronics_driver_PL2303::dataReadComplete( void *obj, void *param, 
 		if ( ior == kIOReturnSuccess )
 		{
 			me->fReadActive = true;
-			me->CheckQueues( port );
+			me->checkQueues( port );
 			return;
 		} else {
 			DEBUG_IOLog("nl_bjaelectronics_driver_PL2303::dataReadComplete dataReadComplete - queueing bulk read failed\n");
@@ -2951,7 +2954,7 @@ bool nl_bjaelectronics_driver_PL2303::allocateRingBuffer( CirQueue *Queue, size_
     DEBUG_IOLog("%s(%p)::allocateRingBuffer\n", getName(), this );
     Buffer = (UInt8*)IOMalloc( kMaxCirBufferSize );
 	
-    InitQueue( Queue, Buffer, kMaxCirBufferSize );
+    initQueue( Queue, Buffer, kMaxCirBufferSize );
 	
     if ( Buffer )
 		return true;
@@ -2979,7 +2982,7 @@ void nl_bjaelectronics_driver_PL2303::freeRingBuffer( CirQueue *Queue )
     if( !(Queue->Start) )  goto Bogus;
     
     IOFree( Queue->Start, Queue->Size );
-    CloseQueue( Queue );
+    closeQueue( Queue );
 	
 Bogus:
 		return;
@@ -3001,14 +3004,14 @@ Bogus:
 //
 /****************************************************************************************************/  
 
-IOReturn nl_bjaelectronics_driver_PL2303::SetSerialConfiguration( void )
+IOReturn nl_bjaelectronics_driver_PL2303::setSerialConfiguration( void )
 {
 	IOReturn rtn;
 	IOUSBDevRequest request;
-	char buf[10];	
-    DEBUG_IOLog("%s(%p)::SetSerialConfiguration baudrate: %d \n", getName(), this, fPort->BaudRate );
-	
-	memset(buf, 0x00, 0x07); //WARNING IS THIS ALLOWED IN KERNEL SPACE ?
+	char * buf;	
+    DEBUG_IOLog("%s(%p)::setSerialConfiguration baudrate: %d \n", getName(), this, fPort->BaudRate );
+	buf = (char *)IOMalloc( 10 );
+	memset(buf, 0x00, 0x07); 
     
     fCurrentBaud = fPort->BaudRate;
     
@@ -3067,7 +3070,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::SetSerialConfiguration( void )
 			
 			
 		default:
-			IOLog("%s(%p)::SetSerialConfiguration - Unsupported baud rate\n", getName(), this);
+			IOLog("%s(%p)::setSerialConfiguration - Unsupported baud rate\n", getName(), this);
 			fBaudCode = 0;
 			break;
     }
@@ -3100,45 +3103,45 @@ IOReturn nl_bjaelectronics_driver_PL2303::SetSerialConfiguration( void )
             buf[4] = 0;
             break;
     }
-	DEBUG_IOLog("%s(%p)::SetSerialConfiguration - StopBits: %d \n", getName(), this,  buf[4]);
+	DEBUG_IOLog("%s(%p)::setSerialConfiguration - StopBits: %d \n", getName(), this,  buf[4]);
 	
 	
     switch(fPort->TX_Parity)
     {
         case PD_RS232_PARITY_NONE:
             buf[5] = 0;
-			DEBUG_IOLog("%s(%p)::SetSerialConfiguration - PARITY_NONE \n", getName(), this);
+			DEBUG_IOLog("%s(%p)::setSerialConfiguration - PARITY_NONE \n", getName(), this);
             break;
             
         case PD_RS232_PARITY_ODD:
             buf[5] = 1;
-			DEBUG_IOLog("%s(%p)::SetSerialConfiguration - PARITY_ODD \n", getName(), this);
+			DEBUG_IOLog("%s(%p)::setSerialConfiguration - PARITY_ODD \n", getName(), this);
             break;
             
         case PD_RS232_PARITY_EVEN:
             buf[5] = 2;
-			DEBUG_IOLog("%s(%p)::SetSerialConfiguration - PARITY_EVEN \n", getName(), this);
+			DEBUG_IOLog("%s(%p)::setSerialConfiguration - PARITY_EVEN \n", getName(), this);
             break;
             
         case PD_RS232_PARITY_MARK:
 			buf[5] = 3;
-			DEBUG_IOLog("%s(%p)::SetSerialConfiguration - PARITY_MARK \n", getName(), this);
+			DEBUG_IOLog("%s(%p)::setSerialConfiguration - PARITY_MARK \n", getName(), this);
 			break;
 			
 		case PD_RS232_PARITY_SPACE:
 			buf[5] = 4;
-			DEBUG_IOLog("%s(%p)::SetSerialConfiguration - PARITY_SPACE \n", getName(), this);
+			DEBUG_IOLog("%s(%p)::setSerialConfiguration - PARITY_SPACE \n", getName(), this);
 			break;
 			
         default:
 			buf[5] = 0;
-			DEBUG_IOLog("%s(%p)::SetSerialConfiguration - PARITY_NONE \n", getName(), this);
+			DEBUG_IOLog("%s(%p)::setSerialConfiguration - PARITY_NONE \n", getName(), this);
     }
 	
 	if (fPort->CharLength >= 5 && fPort->CharLength <= 8){
 		buf[6] = fPort->CharLength;
     }
-	DEBUG_IOLog("%s(%p)::SetSerialConfiguration - Bits: %d \n", getName(), this,  buf[6]);
+	DEBUG_IOLog("%s(%p)::setSerialConfiguration - Bits: %d \n", getName(), this,  buf[6]);
 	
 	request.bmRequestType = USBmakebmRequestType(kUSBOut, kUSBClass, kUSBInterface);
     request.bRequest = SET_LINE_REQUEST;
@@ -3147,8 +3150,8 @@ IOReturn nl_bjaelectronics_driver_PL2303::SetSerialConfiguration( void )
 	request.wLength = 7;
 	request.pData = buf;
 	rtn =  fpDevice->DeviceRequest(&request);
-	DEBUG_IOLog("%s(%p)::SetSerialConfiguration - return: %p \n", getName(), this,  rtn);
-	
+	DEBUG_IOLog("%s(%p)::setSerialConfiguration - return: %p \n", getName(), this,  rtn);
+	IOFree( buf, 10 );
 	return rtn;
 }/* end SetSpeed */
 
@@ -3167,7 +3170,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::SetSerialConfiguration( void )
 //
 /****************************************************************************************************/
 
-QueueStatus nl_bjaelectronics_driver_PL2303::AddBytetoQueue( CirQueue *Queue, char Value )
+QueueStatus nl_bjaelectronics_driver_PL2303::addBytetoQueue( CirQueue *Queue, char Value )
 {
     /* Check to see if there is space by comparing the next pointer,    */
     /* with the last, If they match we are either Empty or full, so     */
@@ -3210,7 +3213,7 @@ Fail:
 //
 /****************************************************************************************************/
 
-QueueStatus nl_bjaelectronics_driver_PL2303::GetBytetoQueue( CirQueue *Queue, UInt8 *Value )
+QueueStatus nl_bjaelectronics_driver_PL2303::getBytetoQueue( CirQueue *Queue, UInt8 *Value )
 {
     DEBUG_IOLog("%s(%p)::GetBytetoQueue\n", getName(), this );
 	
@@ -3252,7 +3255,7 @@ Fail:
 //
 /****************************************************************************************************/
 
-QueueStatus nl_bjaelectronics_driver_PL2303::InitQueue( CirQueue *Queue, UInt8 *Buffer, size_t Size )
+QueueStatus nl_bjaelectronics_driver_PL2303::initQueue( CirQueue *Queue, UInt8 *Buffer, size_t Size )
 {
     DEBUG_IOLog("%s(%p)::InitQueue\n", getName(), this );
 
@@ -3281,7 +3284,7 @@ QueueStatus nl_bjaelectronics_driver_PL2303::InitQueue( CirQueue *Queue, UInt8 *
 //
 /****************************************************************************************************/
 
-QueueStatus nl_bjaelectronics_driver_PL2303::CloseQueue( CirQueue *Queue )
+QueueStatus nl_bjaelectronics_driver_PL2303::closeQueue( CirQueue *Queue )
 {
     DEBUG_IOLog("%s(%p)::CloseQueue\n", getName(), this );
 	
@@ -3307,14 +3310,14 @@ QueueStatus nl_bjaelectronics_driver_PL2303::CloseQueue( CirQueue *Queue )
 //
 /****************************************************************************************************/
 
-size_t nl_bjaelectronics_driver_PL2303::AddtoQueue( CirQueue *Queue, UInt8 *Buffer, size_t Size )
+size_t nl_bjaelectronics_driver_PL2303::addtoQueue( CirQueue *Queue, UInt8 *Buffer, size_t Size )
 {
     size_t      BytesWritten = 0;
     DEBUG_IOLog("%s(%p)::AddtoQueue\n", getName(), this );
 	
-    while ( FreeSpaceinQueue( Queue ) && (Size > BytesWritten) )
+    while ( freeSpaceinQueue( Queue ) && (Size > BytesWritten) )
 	{
-		AddBytetoQueue( Queue, *Buffer++ );
+		addBytetoQueue( Queue, *Buffer++ );
 		BytesWritten++;
 	}
 	
@@ -3334,13 +3337,13 @@ size_t nl_bjaelectronics_driver_PL2303::AddtoQueue( CirQueue *Queue, UInt8 *Buff
 //
 /****************************************************************************************************/
 
-size_t nl_bjaelectronics_driver_PL2303::RemovefromQueue( CirQueue *Queue, UInt8 *Buffer, size_t MaxSize )
+size_t nl_bjaelectronics_driver_PL2303::removefromQueue( CirQueue *Queue, UInt8 *Buffer, size_t MaxSize )
 {
     size_t      BytesReceived = 0;
     UInt8       Value;
     DEBUG_IOLog("%s(%p)::RemovefromQueue\n", getName(), this );
     
-    while( (MaxSize > BytesReceived) && (GetBytetoQueue(Queue, &Value) == queueNoError) ) 
+    while( (MaxSize > BytesReceived) && (getBytetoQueue(Queue, &Value) == queueNoError) ) 
 	{
 		*Buffer++ = Value;
 		BytesReceived++;
@@ -3362,7 +3365,7 @@ size_t nl_bjaelectronics_driver_PL2303::RemovefromQueue( CirQueue *Queue, UInt8 
 //
 /****************************************************************************************************/
 
-size_t nl_bjaelectronics_driver_PL2303::FreeSpaceinQueue( CirQueue *Queue )
+size_t nl_bjaelectronics_driver_PL2303::freeSpaceinQueue( CirQueue *Queue )
 {
     size_t  retVal = 0;
     DEBUG_IOLog("%s(%p)::FreeSpaceinQueue\n", getName(), this );
@@ -3391,7 +3394,7 @@ Fail:
 //
 /****************************************************************************************************/
 
-size_t nl_bjaelectronics_driver_PL2303::UsedSpaceinQueue( CirQueue *Queue )
+size_t nl_bjaelectronics_driver_PL2303::usedSpaceinQueue( CirQueue *Queue )
 {
     DEBUG_IOLog("%s(%p)::UsedSpaceinQueue\n", getName(), this );
 
@@ -3411,7 +3414,7 @@ size_t nl_bjaelectronics_driver_PL2303::UsedSpaceinQueue( CirQueue *Queue )
 //
 /****************************************************************************************************/
 
-size_t nl_bjaelectronics_driver_PL2303::GetQueueSize( CirQueue *Queue )
+size_t nl_bjaelectronics_driver_PL2303::getQueueSize( CirQueue *Queue )
 {
     DEBUG_IOLog("%s(%p)::GetQueueSize\n", getName(), this );
 
@@ -3454,7 +3457,7 @@ size_t nl_bjaelectronics_driver_PL2303::GetQueueSize( CirQueue *Queue )
 //
 /****************************************************************************************************/
 
-void nl_bjaelectronics_driver_PL2303::CheckQueues( PortInfo_t *port )
+void nl_bjaelectronics_driver_PL2303::checkQueues( PortInfo_t *port )
 {
     unsigned long   Used;
     unsigned long   Free;
@@ -3468,8 +3471,8 @@ void nl_bjaelectronics_driver_PL2303::CheckQueues( PortInfo_t *port )
 	
 	/* Check to see if there is anything in the Transmit buffer. */
 	
-    Used = UsedSpaceinQueue( &port->TX );
-    Free = FreeSpaceinQueue( &port->TX );
+    Used = usedSpaceinQueue( &port->TX );
+    Free = freeSpaceinQueue( &port->TX );
     if ( Free == 0 )
 	{
 		QueuingState |=  PD_S_TXQ_FULL;
@@ -3498,8 +3501,8 @@ void nl_bjaelectronics_driver_PL2303::CheckQueues( PortInfo_t *port )
 		
 	
 	/* Check to see if there is anything in the Receive buffer. */
-    Used = UsedSpaceinQueue( &port->RX );
-    Free = FreeSpaceinQueue( &port->RX );
+    Used = usedSpaceinQueue( &port->RX );
+    Free = freeSpaceinQueue( &port->RX );
 	
     if ( Free == 0 )
 	{
@@ -3548,7 +3551,7 @@ void nl_bjaelectronics_driver_PL2303::CheckQueues( PortInfo_t *port )
 //
 /****************************************************************************************************/
 
-bool nl_bjaelectronics_driver_PL2303::SetUpTransmit( void )
+bool nl_bjaelectronics_driver_PL2303::setUpTransmit( void )
 {	
     size_t      count = 0;
     size_t      data_Length;
@@ -3565,7 +3568,7 @@ bool nl_bjaelectronics_driver_PL2303::SetUpTransmit( void )
 	// First check if we can actually do anything, also if IrDA has no room we're done for now
 	
     //if ( GetQueueStatus( &fPort->TX ) != queueEmpty )
-    if (UsedSpaceinQueue(&fPort->TX) > 0)
+    if (usedSpaceinQueue(&fPort->TX) > 0)
 	{
 		//	data_Length = fIrDA->TXBufferAvailable();
 		//	if ( data_Length == 0 )
@@ -3588,12 +3591,12 @@ bool nl_bjaelectronics_driver_PL2303::SetUpTransmit( void )
 		
 		// Fill up the buffer with characters from the queue
 		
-		count = RemovefromQueue( &fPort->TX, TempOutBuffer, data_Length );
+		count = removefromQueue( &fPort->TX, TempOutBuffer, data_Length );
 		
 		fPort->AreTransmitting = TRUE;
 		changeState( fPort, PD_S_TX_BUSY, PD_S_TX_BUSY );
 		
-		StartTransmit(0, NULL, count, TempOutBuffer );      // do the "transmit" -- send to IrCOMM
+		startTransmit(0, NULL, count, TempOutBuffer );      // do the "transmit" -- send to IrCOMM
 		
 		changeState( fPort, 0, PD_S_TX_BUSY );
 		fPort->AreTransmitting = false;
@@ -3609,9 +3612,41 @@ bool nl_bjaelectronics_driver_PL2303::SetUpTransmit( void )
 		// queue, so see if we can free some thread(s)
 		// to enqueue more stuff.
 		
-		CheckQueues( fPort );
+		checkQueues( fPort );
     }
 	
     return true;
     
 }/* end SetUpTransmit */
+
+
+/****************************************************************************************************/
+//
+//      Method:     nl_bjaelectronics_driver_PL2303::setControlLines
+//
+//      Inputs:     the Port and state
+//
+//      Outputs:    IOReturn
+//
+//      Desc:       set control lines of the serial port ( DTR and RTS )
+//
+/****************************************************************************************************/
+IOReturn nl_bjaelectronics_driver_PL2303::setControlLines( PortInfo_t *port, UInt32 state ){
+
+	IOReturn rtn;
+	IOUSBDevRequest request;
+    DEBUG_IOLog("%s(%p)::setControlLines DTR: RTS: \n", getName(), this );
+	
+
+	
+	request.bmRequestType = USBmakebmRequestType(kUSBOut, kUSBClass, kUSBInterface);
+    request.bRequest = SET_CONTROL_REQUEST;
+	request.wValue =  0x03; 
+	request.wIndex = 0;
+	request.wLength = 0;
+	request.pData = NULL;
+	rtn =  fpDevice->DeviceRequest(&request);
+	DEBUG_IOLog("%s(%p)::setControlLines - return: %p \n", getName(), this,  rtn);
+	
+	return rtn;
+}/* end setControlLines */
