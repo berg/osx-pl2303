@@ -40,7 +40,11 @@
 
 #define MAX_BLOCK_SIZE      PAGE_SIZE
 
-                        
+#define kXOnChar  '\x11'
+#define kXOffChar '\x13'
+
+
+						                       
 #define kLinkSpeedIgnored	0
 #define kLinkSpeed75		75
 #define kLinkSpeed150		150
@@ -80,11 +84,32 @@
 #define DEFAULT_NOTIFY      0x00
 #define DEFAULT_STATE       ( PD_S_TX_ENABLE | PD_S_RX_ENABLE | PD_RS232_A_TXO | PD_RS232_A_RXO )
 
-#define IDLE_XO          0
-#define NEEDS_XOFF       1
-#define SENT_XOFF       -1
-#define NEEDS_XON        2
-#define SENT_XON        -2
+#define	CONTINUE_SEND		1
+#define	PAUSE_SEND		2
+
+#define kRxAutoFlow	((UInt32)( PD_RS232_A_RFR | PD_RS232_A_DTR | PD_RS232_A_RXO ))
+#define kTxAutoFlow	((UInt32)( PD_RS232_A_CTS | PD_RS232_A_DSR | PD_RS232_A_TXO | PD_RS232_A_DCD ))
+#define kControl_StateMask	((UInt32)( PD_RS232_S_CTS | PD_RS232_S_DSR | PD_RS232_S_CAR | PD_RS232_S_RI  ))
+#define kRxQueueState ((UInt32)( PD_S_RXQ_EMPTY | PD_S_RXQ_LOW_WATER | PD_S_RXQ_HIGH_WATER | PD_S_RXQ_FULL ))
+#define kTxQueueState ((UInt32)( PD_S_TXQ_EMPTY | PD_S_TXQ_LOW_WATER | PD_S_TXQ_HIGH_WATER | PD_S_TXQ_FULL ))
+
+#define kCONTROL_DTR		0x01
+#define kCONTROL_RTS		0x02
+
+
+enum tXO_State {
+    kXOnSent = -2,
+    kXOffSent = -1,
+    kXO_Idle = 0,
+    kXOffNeeded = 1,
+    kXOnNeeded = 2
+} ;
+
+//#define IDLE_XO          0
+//#define NEEDS_XOFF       1
+//#define SENT_XOFF       -1
+//#define NEEDS_XON        2
+//#define SENT_XON        -2
 
 #define INTERRUPT_BUFF_SIZE 1
 #define USBLapPayLoad       2048
@@ -142,13 +167,23 @@ typedef struct CirQueue
 
 typedef enum QueueStatus
 {
-    queueNoError = 0,
-    queueFull,
-    queueEmpty,
-    queueMaxStatus
+    kQueueNoError = 0,
+    kQueueFull,
+    kQueueEmpty,
+    kQueueMaxStatus
 } QueueStatus;
 
-    /* Inline time conversions */
+
+// selects between bits of a and b.  if a bit in m is set, then take the corresponding
+// bit of b; otherwise, take the corresponding bit of a.
+UInt32 static inline maskMux(UInt32 a, UInt32 b, UInt32 m) { return (a&(~m)) | (b&m); }
+
+// if b is true, then return a with all m's bits set; otherwise return a with all m's
+// bits cleared.
+UInt32 static inline boolBit(UInt32 a, bool b, UInt32 m) { return b ? (a|m) : (a&(~m)); }
+
+
+/* Inline time conversions */
     
 static inline unsigned long tval2long( mach_timespec val )
 {
@@ -198,8 +233,17 @@ typedef struct
     UInt32          SWspecial[ 0x100 >> SPECIAL_SHIFT ];
     UInt32          FlowControl;    // notify-on-delta & auto_control
 	
-    int             RXOstate;    /* Indicates our receive state.    */
-    int             TXOstate;    /* Indicates our transmit state, if we have received any Flow Control. */
+    tXO_State       RXOstate;    /* Indicates our receive state.    */
+    tXO_State       TXOstate;    /* Indicates our transmit state, if we have received any Flow Control. */
+
+    UInt32			FlowControlState;			// tx flow control state, one of PAUSE_SEND if paused or CONTINUE_SEND if not blocked
+    bool			DCDState;
+    bool			CTSState;
+    bool			xOffSent;				// init false, set true if sw flow control and we've sent an xoff
+    bool			DTRAsserted;				// init true, set false if DTR flow control and DTR is cleared to hold back rx
+    bool			RTSAsserted;				// init true, set false if RTS flow control and RTS is cleared to hold back rx
+    bool			aboveRxHighWater;
+    bool			BreakState;
     
     IOThread        FrameTOEntry;
     
@@ -307,7 +351,7 @@ public:
     static	IOReturn	enqueueDataAction(OSObject *owner, void *arg0, void *arg1, void *arg2, void *arg3);
     static	IOReturn	dequeueDataAction(OSObject *owner, void *arg0, void *arg1, void *arg2, void *arg3);
     
-        // Gated methods called by the Static stubs
+	// Gated methods called by the Static stubs
 	virtual	IOReturn	acquirePortGated(bool sleep, void *refCon);
     virtual	IOReturn	releasePortGated(void *refCon);
     virtual	IOReturn	setStateGated(UInt32 state, UInt32 mask, void *refCon);
@@ -334,6 +378,8 @@ private:
     QueueStatus     getBytetoQueue( CirQueue *Queue, UInt8 *Value );
     QueueStatus     initQueue( CirQueue *Queue, UInt8 *Buffer, size_t Size );
     QueueStatus     closeQueue( CirQueue *Queue );
+	QueueStatus     flush( CirQueue *Queue );
+	QueueStatus     getQueueStatus( CirQueue *Queue );
     size_t          addtoQueue( CirQueue *Queue, UInt8 *Buffer, size_t Size );
     size_t          removefromQueue( CirQueue *Queue, UInt8 *Buffer, size_t MaxSize );
     size_t          freeSpaceinQueue( CirQueue *Queue );
@@ -368,6 +414,7 @@ private:
     void            freeRingBuffer( CirQueue *Queue );
 
     /**** FlowControl ****/
-	IOReturn        setControlLines( PortInfo_t *port, UInt32 state );
+	IOReturn        setControlLines( PortInfo_t *port );
+    UInt32			generateRxQState( PortInfo_t *port );
 
 };

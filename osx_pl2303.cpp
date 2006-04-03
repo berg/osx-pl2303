@@ -64,14 +64,14 @@ extern "C" {
 #include <pexpert/pexpert.h>
 }
 
-#define DEBUG
+//#define DEBUG
 #ifdef DEBUG
 #define DEBUG_IOLog(args...)	IOLog (args)
 #else
 #define DEBUG_IOLog(args...)
 #endif
 
-#define DATALOG
+//#define DATALOG
 
 #ifdef DATALOG
 #define DATA_IOLog(args...)	IOLog (args)
@@ -536,10 +536,7 @@ bool nl_bjaelectronics_driver_PL2303::allocateResources( void )
 		IOLog("%s(%p)::allocateResources setSerialConfiguration failed\n", getName(), this);
 		goto Fail;
 	}
-	if( setControlLines( fPort, 0x00) ){
-		IOLog("%s(%p)::allocateResources setControlLines failed\n", getName(), this);
-		goto Fail;
-	}
+
 		
     DEBUG_IOLog("%s(%p)::allocateResources successful\n", getName(), this);
     return true;
@@ -1028,11 +1025,10 @@ void nl_bjaelectronics_driver_PL2303::SetStructureDefaults( PortInfo_t *port, bo
     port->TX_Parity         = 1;                        // No Parity
     port->RX_Parity         = 1;                        // --ditto--
     port->MinLatency        = false;
-    port->XONchar           = '\x11';
-    port->XOFFchar          = '\x13';
-    port->FlowControl       = 0x00000000;
-    port->RXOstate          = IDLE_XO;
-    port->TXOstate          = IDLE_XO;
+    port->XONchar           = kXOnChar;
+    port->XOFFchar          = kXOffChar;
+    port->RXOstate          = kXO_Idle;
+    port->TXOstate          = kXO_Idle;
     port->FrameTOEntry      = NULL;
 	
     port->RXStats.BufferSize    = kMaxCirBufferSize;
@@ -1044,8 +1040,16 @@ void nl_bjaelectronics_driver_PL2303::SetStructureDefaults( PortInfo_t *port, bo
     port->TXStats.LowWater      = port->RXStats.HighWater >> 1;
     
     port->FlowControl           = (DEFAULT_AUTO | DEFAULT_NOTIFY);
-	
-    port->AreTransmitting   = FALSE;
+
+    port->FlowControlState		= CONTINUE_SEND;
+    port->DCDState				= false;
+    port->BreakState			= false;
+    
+    port->xOffSent				= false;
+    port->RTSAsserted			= true;
+    port->DTRAsserted			= true;  
+		
+    port->AreTransmitting		= FALSE;
 	
     for ( tmp=0; tmp < (256 >> SPECIAL_SHIFT); tmp++ )
 		port->SWspecial[ tmp ] = 0;
@@ -1369,15 +1373,15 @@ IOReturn nl_bjaelectronics_driver_PL2303::message( UInt32 type, IOService *provi
 UInt32 nl_bjaelectronics_driver_PL2303::readPortState( PortInfo_t *port )
 {
     UInt32              returnState;
-	DEBUG_IOLog("%s(%p)::readPortState\n", getName(), this, returnState );
+	DEBUG_IOLog("nl_bjaelectronics_driver_PL2303::readPortState\n", returnState );
 
     IOLockLock( port->serialRequestLock );
-	DEBUG_IOLog("%s(%p)::readPortState port->State\n", getName(), this, returnState );
+	DEBUG_IOLog("nl_bjaelectronics_driver_PL2303::readPortState port->State\n", returnState );
 
 	returnState = port->State;
 	IOLockUnlock( port->serialRequestLock);
 	
-	DEBUG_IOLog("%s(%p)::readPortState returnstate: %p \n", getName(), this, returnState );
+	DEBUG_IOLog("nl_bjaelectronics_driver_PL2303::readPortState returnstate: %p \n", returnState );
 	
     return returnState;
     
@@ -1402,11 +1406,34 @@ void nl_bjaelectronics_driver_PL2303::changeState( PortInfo_t *port, UInt32 stat
 {
     UInt32              delta;
     DEBUG_IOLog("%s(%p)::changeState\n", getName(), this);
-    	
-    IOLockLock( port->serialRequestLock );
+	IOLockLock( port->serialRequestLock );
+	
+	if ((mask & PD_RS232_S_DTR) && ((port->FlowControl & PD_RS232_A_DTR) != PD_RS232_A_DTR))
+        {
+            if ((state & PD_RS232_S_DTR) != (fPort->State & PD_RS232_S_DTR))
+            {
+                if (state & PD_RS232_S_DTR)
+                {
+					port->State |= PD_RS232_S_DTR;
+					setControlLines( port );	
+
+					IOLog("WOW DTR AAN changestate\n");
+                } else {
+					port->State &= ~PD_RS232_S_DTR;
+					setControlLines( port );	
+
+                }
+            }
+        }
+		
     state = (port->State & ~mask) | (state & mask); // compute the new state
     delta = state ^ port->State;                    // keep a copy of the diffs
     port->State = state;
+
+	if (delta & ( PD_RS232_S_DTR | PD_RS232_S_RFR )){
+		IOLog("setControlLines aanroepen\n");
+        setControlLines( port );	
+}
 	
 	// Wake up all threads asleep on WatchStateMask
 	
@@ -1414,7 +1441,11 @@ void nl_bjaelectronics_driver_PL2303::changeState( PortInfo_t *port, UInt32 stat
 	{
 		fCommandGate->commandWakeup((void *)&fPort->State);
 	}
-	
+    DEBUG_IOLog("%s(%p)::changeState delta: %p\n", getName(), this, delta);
+
+	// if any modem control signals changed, we need to do an setControlLines()
+
+		
     IOLockUnlock( port->serialRequestLock );
     return;
     
@@ -1437,7 +1468,7 @@ void nl_bjaelectronics_driver_PL2303::changeState( PortInfo_t *port, UInt32 stat
 IOReturn nl_bjaelectronics_driver_PL2303::acquirePort(bool sleep, void *refCon)
 {
     IOReturn	ret;
-    IOLog("%s(%p)::acquirePort ACQUIREPORT PLEASE SET BACK TO DEBUGLOG\n", getName(), this);
+    DEBUG_IOLog("%s(%p)::acquirePort\n", getName(), this);
 
     retain();
     ret = fCommandGate->runAction(acquirePortAction, (void *)sleep, (void *)refCon);
@@ -1642,6 +1673,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::releasePortGated( void *refCon )
 
 IOReturn nl_bjaelectronics_driver_PL2303::setState(UInt32 state, UInt32 mask, void *refCon)
 {
+    PortInfo_t *port = (PortInfo_t *) refCon;
     IOReturn	ret;
     DEBUG_IOLog("%s(%p)::setState\n", getName(), this);
     	
@@ -1654,15 +1686,14 @@ IOReturn nl_bjaelectronics_driver_PL2303::setState(UInt32 state, UInt32 mask, vo
 	
 	// ignore any bits that are read-only
 	
-	//    mask &= (~fPort.FlowControl & PD_RS232_A_MASK) | PD_S_MASK;
-	//    if (mask)
-	//    {
-	retain();
-	ret = fCommandGate->runAction(setStateAction, (void *)state, (void *)mask, (void *)refCon);
-	release();
-	
-	return ret;
-	//    }
+	mask &= (~port->FlowControl & PD_RS232_A_MASK) | PD_S_MASK;
+	if (mask)
+	{
+		retain();
+		ret = fCommandGate->runAction(setStateAction, (void *)state, (void *)mask, (void *)refCon);
+		release();	
+		return ret;
+	}
 	
 	
     return kIOReturnSuccess;
@@ -1893,7 +1924,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 {
     PortInfo_t  *port = (PortInfo_t *) refCon;
     IOReturn    ret = kIOReturnSuccess;
-    UInt32      state, delta;
+    UInt32      state, delta, old;
  
 	DEBUG_IOLog("%s(%p)::executeEventGated\n", getName(), this);
 	   
@@ -1907,11 +1938,11 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
     switch ( event )
 	{
 		case PD_RS232_E_XON_BYTE:
-			DEBUG_IOLog("%s(%p)::executeEvent - PD_RS232_E_XON_BYTE\n", getName(), this );
+			IOLog("%s(%p)::executeEvent - PD_RS232_E_XON_BYTE\n", getName(), this );
 			port->XONchar = data;
 			break;
 		case PD_RS232_E_XOFF_BYTE:
-			DEBUG_IOLog("%s(%p)::executeEvent - PD_RS232_E_XOFF_BYTE\n", getName(), this );
+			IOLog("%s(%p)::executeEvent - PD_RS232_E_XOFF_BYTE\n", getName(), this );
 			port->XOFFchar = data;
 			break;
 		case PD_E_SPECIAL_BYTE:
@@ -1927,41 +1958,47 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 		case PD_E_FLOW_CONTROL:
 			DEBUG_IOLog("%s(%p)::executeEvent - PD_E_FLOW_CONTROL\n", getName(), this );
 			
-			/*         old = fPort.FlowControl;				    // save old modes for unblock checks
-            fPort.FlowControl = data & (CAN_BE_AUTO | CAN_NOTIFY);  // new values, trimmed to legal values
+			old = port->FlowControl;				    // save old modes for unblock checks
+            port->FlowControl = data & (CAN_BE_AUTO | CAN_NOTIFY);  // new values, trimmed to legal values
+			IOLog("%s(%p)::executeEvent - PD_E_FLOW_CONTROL %p\n", getName(), this, port->FlowControl );
 			
 			// now cleanup if we've blocked RX or TX with the previous style flow control and we're switching to a different kind
 			// we have 5 different flow control modes to check and unblock; 3 on rx, 2 on tx
-			if (portOpened && old && (old ^ fPort.FlowControl))		// if had some modes, and some modes are different
-	    {
-#define SwitchingAwayFrom(flag) ((old & flag) && !(fPort.FlowControl & flag))
+			if (!fTerminate && old && (old ^ port->FlowControl))		// if had some modes, and some modes are different
+			{
+				#define SwitchingAwayFrom(flag) ((old & flag) && !(port->FlowControl & flag))
 				
 				// if switching away from rx xon/xoff and we've sent an xoff, unblock
-				if (SwitchingAwayFrom(PD_RS232_A_RXO) && fPort.xOffSent)
+				if (SwitchingAwayFrom(PD_RS232_A_RXO) && port->xOffSent)
 				{
-					AddBytetoQueue(&(fPort.TX), fPort.XONchar);
-					fPort.xOffSent = false;
-					SetUpTransmit(&fPort);
+					IOLog("%s(%p)::executeEvent - PD_E_FLOW_CONTROL send xoff\n", getName(), this, port->FlowControl );
+					addBytetoQueue(&(port->TX), port->XONchar);
+					port->xOffSent = false;
+					setUpTransmit( );
 				}
 				
 				// if switching away from RTS flow control and we've lowered RTS, need to raise it to unblock
-				if (SwitchingAwayFrom(PD_RS232_A_RTS) && !fPort.RTSAsserted)
+				if (SwitchingAwayFrom(PD_RS232_A_RTS) && !port->RTSAsserted)
 				{
-					fPort.RTSAsserted = true;
-					SccSetRTS(&fPort, true);			    // raise RTS again
+					IOLog("%s(%p)::executeEvent - PD_E_FLOW_CONTROL set RTS\n", getName(), this, port->FlowControl );
+					port->RTSAsserted = true;
+					port->State |= PD_RS232_S_RFR;		    // raise RTS again
 				}
 				
 				// if switching away from DTR flow control and we've lowered DTR, need to raise it to unblock
-				if (SwitchingAwayFrom(PD_RS232_A_DTR) && !fPort.DTRAsserted)
+				if (SwitchingAwayFrom(PD_RS232_A_DTR) && !port->DTRAsserted)
 				{
-					fPort.DTRAsserted = true;
-					SccSetDTR(&fPort, true);			    // raise DTR again
+					IOLog("%s(%p)::executeEvent - PD_E_FLOW_CONTROL set DTR\n", getName(), this, port->FlowControl );
+					port->DTRAsserted = true;			
+					IOLog("WOW DTR AAN\n");
+
+					port->State |= PD_RS232_S_DTR;		    // raise DTR again
 				}
-				
-				// If switching away from CTS and we've paused tx, continue it
-				if (SwitchingAwayFrom(PD_RS232_S_CTS) && fPort.FlowControlState != CONTINUE_SEND)
+								
+/*				// If switching away from CTS and we've paused tx, continue it
+				if (SwitchingAwayFrom(PD_RS232_S_CTS) && port->FlowControlState != CONTINUE_SEND)
 				{
-					fPort.FlowControlState = CONTINUE_SEND;
+					port->FlowControlState = CONTINUE_SEND;
 					IODBDMAContinue(fPort.TxDBDMAChannel.dmaBase);		// Continue transfer
 				}
 				
@@ -1971,9 +2008,11 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 					fPort.RXOstate = NEEDS_XOFF;
 					fPort.FlowControlState = CONTINUE_SEND;
 					IODBDMAContinue(fPort.TxDBDMAChannel.dmaBase);		// Continue transfer
-				}
-	    }
-			*/
+				} */
+				changeState( port, (UInt32)PD_S_ACTIVE, (UInt32)PD_S_ACTIVE ); 
+
+			}
+		
 			break;
 			
 		case PD_E_ACTIVE:
@@ -1984,6 +2023,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 				{
 					SetStructureDefaults( port, FALSE );
 					changeState( port, (UInt32)PD_S_ACTIVE, (UInt32)PD_S_ACTIVE ); // activate port
+//					changeState( port, generateRxQState( port ), PD_S_TXQ_MASK | PD_S_RXQ_MASK | kRxAutoFlow);
 				}
 			} else {
 				if ( (state & PD_S_ACTIVE) )
@@ -2069,7 +2109,10 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 				break;
 			
 		case PD_E_RXQ_FLUSH:
-			DEBUG_IOLog("%s(%p)::executeEvent - PD_E_RXQ_FLUSH \n", getName(), this );
+			IOLog("%s(%p)::executeEvent - PD_E_RXQ_FLUSH \n", getName(), this );
+		    flush( &port->RX ); 
+//            state = maskMux(state, generateRxQState( port ), (PD_S_RXQ_MASK | kRxAutoFlow));
+//            delta |= PD_S_RXQ_MASK | kRxAutoFlow;
 			break;
 			
 		case PD_E_RX_DATA_INTEGRITY:
@@ -2123,10 +2166,14 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 			
 		case PD_E_RXQ_HIGH_WATER:
 			DEBUG_IOLog("%s(%p)::executeEvent - PD_E_RXQ_HIGH_WATER \n", getName(), this );
+//            state = maskMux(state, generateRxQState( port ), (PD_S_RXQ_MASK | kRxAutoFlow));
+//            delta |= PD_S_RXQ_MASK | kRxAutoFlow;
 			break;
 			
 		case PD_E_RXQ_LOW_WATER:
 			DEBUG_IOLog("%s(%p)::executeEvent - PD_E_RXQ_LOW_WATER \n", getName(), this );
+//            state = maskMux(state, generateRxQState( port ), (PD_S_RXQ_MASK | kRxAutoFlow));
+//            delta |= PD_S_RXQ_MASK | kRxAutoFlow;
 			break;
 			
 		case PD_E_TXQ_HIGH_WATER:
@@ -2144,9 +2191,9 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 	}
 	
     state |= state;/* ejk for compiler warnings. ?? */
-		changeState( port, state, delta );
+	changeState( port, state, delta );
 		
-		return ret;
+	return ret;
 		
 }/* end executeEvent */
 
@@ -2330,12 +2377,12 @@ IOReturn nl_bjaelectronics_driver_PL2303::requestEventGated( UInt32 event, UInt3
 				break;
 				
 			case PD_RS232_E_XON_BYTE:
-				DEBUG_IOLog("%s(%p)::requestEvent - PD_RS232_E_XON_BYTE\n", getName(), this);
+				IOLog("%s(%p)::requestEvent - PD_RS232_E_XON_BYTE\n", getName(), this);
 				*data = port->XONchar;          
 				break;
 				
 			case PD_RS232_E_XOFF_BYTE:
-				DEBUG_IOLog("%s(%p)::requestEvent - PD_RS232_E_XOFF_BYTE\n", getName(), this);
+				IOLog("%s(%p)::requestEvent - PD_RS232_E_XOFF_BYTE\n", getName(), this);
 				*data = port->XOFFchar;         
 				break;
 				
@@ -3182,7 +3229,7 @@ QueueStatus nl_bjaelectronics_driver_PL2303::addBytetoQueue( CirQueue *Queue, ch
 	
     if ( (Queue->NextChar == Queue->LastChar) && Queue->InQueue ) {
 		IOLockUnlock( fPort->serialRequestLock);
-		return queueFull;
+		return kQueueFull;
 	}
 	
     *Queue->NextChar++ = Value;
@@ -3194,10 +3241,10 @@ QueueStatus nl_bjaelectronics_driver_PL2303::addBytetoQueue( CirQueue *Queue, ch
 		Queue->NextChar =  Queue->Start;
 	
     IOLockUnlock( fPort->serialRequestLock);
-    return queueNoError;
+    return kQueueNoError;
     
 Fail:
-		return queueFull;       // for lack of a better error
+		return kQueueFull;       // for lack of a better error
     
 }/* end AddBytetoQueue */
 
@@ -3224,7 +3271,7 @@ QueueStatus nl_bjaelectronics_driver_PL2303::getBytetoQueue( CirQueue *Queue, UI
 	
     if ( (Queue->NextChar == Queue->LastChar) && !Queue->InQueue ) {
 		IOLockUnlock(fPort->serialRequestLock);
-		return queueEmpty;
+		return kQueueEmpty;
 	}
 	
     *Value = *Queue->LastChar++;
@@ -3236,10 +3283,10 @@ QueueStatus nl_bjaelectronics_driver_PL2303::getBytetoQueue( CirQueue *Queue, UI
 		Queue->LastChar =  Queue->Start;
 	
     IOLockUnlock(fPort->serialRequestLock);
-    return queueNoError;
+    return kQueueNoError;
     
 Fail:
-		return queueEmpty;          // can't get to it, pretend it's empty
+		return kQueueEmpty;          // can't get to it, pretend it's empty
     
 }/* end GetBytetoQueue */
 
@@ -3268,7 +3315,7 @@ QueueStatus nl_bjaelectronics_driver_PL2303::initQueue( CirQueue *Queue, UInt8 *
 	
     IOSleep( 1 );
     
-    return queueNoError ;
+    return kQueueNoError ;
     
 }/* end InitQueue */
 
@@ -3294,7 +3341,29 @@ QueueStatus nl_bjaelectronics_driver_PL2303::closeQueue( CirQueue *Queue )
     Queue->LastChar = 0;
     Queue->Size     = 0;
 	
-    return queueNoError;
+    return kQueueNoError;
+    
+}/* end CloseQueue */
+
+/****************************************************************************************************/
+//
+//      Method:     nl_bjaelectronics_driver_PL2303::Flush
+//
+//      Inputs:     Queue - the queue to be flushesd
+//
+//      Outputs:    Queue status - queueNoError.
+//
+//      Desc:       Clear queue
+//
+/****************************************************************************************************/
+
+QueueStatus nl_bjaelectronics_driver_PL2303::flush( CirQueue *Queue )
+{
+    DEBUG_IOLog("%s(%p)::flush\n", getName(), this );
+	
+    Queue->NextChar = Queue->LastChar = Queue->Start;
+	
+    return kQueueNoError;
     
 }/* end CloseQueue */
 
@@ -3343,7 +3412,7 @@ size_t nl_bjaelectronics_driver_PL2303::removefromQueue( CirQueue *Queue, UInt8 
     UInt8       Value;
     DEBUG_IOLog("%s(%p)::RemovefromQueue\n", getName(), this );
     
-    while( (MaxSize > BytesReceived) && (getBytetoQueue(Queue, &Value) == queueNoError) ) 
+    while( (MaxSize > BytesReceived) && (getBytetoQueue(Queue, &Value) == kQueueNoError) ) 
 	{
 		*Buffer++ = Value;
 		BytesReceived++;
@@ -3433,17 +3502,17 @@ size_t nl_bjaelectronics_driver_PL2303::getQueueSize( CirQueue *Queue )
 //      Desc:       Returns the status of the circular queue.
 //
 /****************************************************************************************************/
-/*
- QueueStatus nl_bjaelectronics_driver_PL2303::GetQueueStatus( CirQueue *Queue )
+
+ QueueStatus nl_bjaelectronics_driver_PL2303::getQueueStatus( CirQueue *Queue )
  {
 	 if ( (Queue->NextChar == Queue->LastChar) && Queue->InQueue )
-		 return queueFull;
+		 return kQueueFull;
 	 else if ( (Queue->NextChar == Queue->LastChar) && !Queue->InQueue )
-		 return queueEmpty;
+		 return kQueueEmpty;
 	 
-	 return queueNoError ;
+	 return kQueueNoError ;
 	 
- }*/ /* end GetQueueStatus */
+ } /* end GetQueueStatus */
 
 /****************************************************************************************************/
 //
@@ -3463,18 +3532,20 @@ void nl_bjaelectronics_driver_PL2303::checkQueues( PortInfo_t *port )
     unsigned long   Free;
     unsigned long   QueuingState;
     unsigned long   DeltaState;
+    UInt32	SW_FlowControl;
+    UInt32	RTS_FlowControl;
+    UInt32	DTR_FlowControl;
     DEBUG_IOLog("%s(%p)::CheckQueues\n", getName(), this );
 	
     // Initialise the QueueState with the current state.
 	
     QueuingState = readPortState( port );
-	
-	/* Check to see if there is anything in the Transmit buffer. */
-	
+		
     Used = usedSpaceinQueue( &port->TX );
     Free = freeSpaceinQueue( &port->TX );
     if ( Free == 0 )
 	{
+
 		QueuingState |=  PD_S_TXQ_FULL;
 		QueuingState &= ~PD_S_TXQ_EMPTY;
 	}
@@ -3491,15 +3562,16 @@ void nl_bjaelectronics_driver_PL2303::checkQueues( PortInfo_t *port )
 		
 	
 	/* Check to see if we are below the low water mark. */
-    if ( Used < port->TXStats.LowWater )
+    if ( Used < port->TXStats.LowWater )	
 		QueuingState |=  PD_S_TXQ_LOW_WATER;
 	else QueuingState &= ~PD_S_TXQ_LOW_WATER;
 	
     if ( Used > port->TXStats.HighWater )
+	
 		QueuingState |= PD_S_TXQ_HIGH_WATER;
 	else QueuingState &= ~PD_S_TXQ_HIGH_WATER;
 		
-	
+
 	/* Check to see if there is anything in the Receive buffer. */
     Used = usedSpaceinQueue( &port->RX );
     Free = freeSpaceinQueue( &port->RX );
@@ -3520,19 +3592,72 @@ void nl_bjaelectronics_driver_PL2303::checkQueues( PortInfo_t *port )
 		QueuingState &= ~PD_S_RXQ_EMPTY;
 	}
 	
+
+
+    SW_FlowControl  = port->FlowControl & PD_RS232_A_RXO;
+    RTS_FlowControl = port->FlowControl & PD_RS232_A_RTS;
+    DTR_FlowControl = port->FlowControl & PD_RS232_A_DTR;
+	
 	/* Check to see if we are below the low water mark. */
-    if ( Used < port->RXStats.LowWater )
-		QueuingState |= PD_S_RXQ_LOW_WATER;
-	else QueuingState &= ~PD_S_RXQ_LOW_WATER;
-	
-    if ( Used > port->RXStats.HighWater )
-		QueuingState |= PD_S_RXQ_HIGH_WATER;
-	else QueuingState &= ~PD_S_RXQ_HIGH_WATER;
-	
+
+    if (Used < port->RXStats.LowWater)			    // if under low water mark, release any active flow control
+    {
+        if ((SW_FlowControl) && (port->xOffSent))	    // unblock xon/xoff flow control
+			{
+				IOLog("GODVER XON AAN\n");
+
+				port->xOffSent = false;
+				addBytetoQueue(&(port->TX), port->XONchar);
+				setUpTransmit( );
+			}
+		if (RTS_FlowControl && !port->RTSAsserted)	    // unblock RTS flow control
+			{
+				port->RTSAsserted = true;
+				port->State |= PD_RS232_S_RFR;
+			}	
+		if (DTR_FlowControl && !port->DTRAsserted)	    // unblock DTR flow control
+			{
+				port->DTRAsserted = true;
+				IOLog("WOW DTR AAN\n");
+
+				port->State |= PD_RS232_S_DTR;
+			}	
+        QueuingState |= PD_S_RXQ_LOW_WATER;
+    } else {
+        QueuingState &= ~PD_S_RXQ_LOW_WATER;
+    }
+
+	// Check to see if we are above the high water mark
+        
+    if (Used > port->RXStats.HighWater)			    // if over highwater mark, block w/any flow control thats enabled
+    {
+        if ((SW_FlowControl) && (!port->xOffSent))
+			{
+				IOLog("GODVER XOFF AAN\n");
+			
+				port->xOffSent = true;
+				addBytetoQueue(&(port->TX), port->XOFFchar);
+				setUpTransmit( );
+			}
+		if (RTS_FlowControl && port->RTSAsserted)
+			{
+				port->RTSAsserted = false;
+				port->State &= ~PD_RS232_S_RFR;			    // lower RTS to hold back more rx data
+			}
+        if (DTR_FlowControl && port->DTRAsserted)
+			{
+				port->DTRAsserted = false;
+				port->State &= ~PD_RS232_S_DTR;
+			}
+        QueuingState |= PD_S_RXQ_HIGH_WATER;
+    } else {
+        QueuingState &= ~PD_S_RXQ_HIGH_WATER;
+		port->aboveRxHighWater = false;
+    }
+					
 	/* Figure out what has changed to get mask.*/
     DeltaState = QueuingState ^ readPortState( port );
     changeState( port, QueuingState, DeltaState );
-	//    		DEBUG_IOLog("%s(%p)::READY \n", getName(), this);
 	
     return;
     
@@ -3631,22 +3756,90 @@ bool nl_bjaelectronics_driver_PL2303::setUpTransmit( void )
 //      Desc:       set control lines of the serial port ( DTR and RTS )
 //
 /****************************************************************************************************/
-IOReturn nl_bjaelectronics_driver_PL2303::setControlLines( PortInfo_t *port, UInt32 state ){
-
+IOReturn nl_bjaelectronics_driver_PL2303::setControlLines( PortInfo_t *port ){
+	UInt32 state = port->State;
 	IOReturn rtn;
 	IOUSBDevRequest request;
-    DEBUG_IOLog("%s(%p)::setControlLines DTR: RTS: \n", getName(), this );
+
+    IOLog("%s(%p)::setControlLines\n", getName(), this );
+	
+    UInt8 value=0;
+
+    if (state & PD_RS232_S_DTR)  { value |= kCONTROL_DTR;
+	    IOLog("setControlLines DTR ON \n" );
+}
+    if (state & PD_RS232_S_RFR)  {value |= kCONTROL_RTS;
+    	    IOLog("setControlLines RTS ON \n" );
+}
 	
 
-	
 	request.bmRequestType = USBmakebmRequestType(kUSBOut, kUSBClass, kUSBInterface);
     request.bRequest = SET_CONTROL_REQUEST;
-	request.wValue =  0x03; 
+	request.wValue =  value; 
 	request.wIndex = 0;
 	request.wLength = 0;
 	request.pData = NULL;
 	rtn =  fpDevice->DeviceRequest(&request);
-	DEBUG_IOLog("%s(%p)::setControlLines - return: %p \n", getName(), this,  rtn);
+	IOLog("%s(%p)::setControlLines - return: %p \n", getName(), this,  rtn);
 	
 	return rtn;
 }/* end setControlLines */
+
+
+
+// generateRxQState() : Called to generate the status bits for queue control.
+// This routine should be called any time an enqueue/dequeue boundary is crossed
+// or any of the queue level variables are changed by the user.
+// WARNING: {BIGGEST_EVENT ≤ LowWater ≤ (HighWater-BIGGEST_EVENT)} and
+//	{(LowWater-BIGGEST_EVENT) ≤ HighWater ≤ (size-BIGGEST_EVENT)} must be enforced.
+
+
+UInt32 nl_bjaelectronics_driver_PL2303::generateRxQState( PortInfo_t *port )
+{
+    IOLog("%s(%p)::generateRxQState\n", getName(), this );
+
+    UInt32 state = port->State & (kRxAutoFlow | kTxAutoFlow);
+    UInt32 fifostate = port->State & ( kRxQueueState );
+    state = maskMux(state, (UInt32)fifostate >> PD_S_RX_OFFSET, PD_S_RXQ_MASK);
+    switch (fifostate) {
+        case (PD_S_RXQ_EMPTY | PD_S_RXQ_LOW_WATER) :
+        case PD_S_RXQ_LOW_WATER :
+            if ( port->FlowControl & PD_RS232_A_RFR) {
+                state |= PD_RS232_S_RFR;
+            } else if ( port->FlowControl & PD_RS232_A_RXO) {
+                state |= PD_RS232_S_RXO;
+                switch ( port->RXOstate ) {
+                    case kXOffSent :
+                    case kXO_Idle :	port->RXOstate=kXOnNeeded;	break;
+                    case kXOffNeeded :	port->RXOstate=kXOnSent;	break;
+                    default :		break;
+                }                    
+            } else if ( port->FlowControl & PD_RS232_A_DTR) {
+                state |= PD_RS232_S_DTR;
+							IOLog("WOW DTR AAN\n");
+
+            }
+            break;
+        case PD_S_RXQ_HIGH_WATER :
+        case (PD_S_RXQ_HIGH_WATER | PD_S_RXQ_FULL) :
+            if ( port->FlowControl & PD_RS232_A_RFR) {
+                state &= ~PD_RS232_S_RFR;
+            } else if ( port->FlowControl & PD_RS232_A_RXO) {
+                state &= ~PD_RS232_S_RXO;
+                switch ( port->RXOstate ) {
+                    case kXOnSent :
+                    case kXO_Idle :	port->RXOstate=kXOffNeeded;	break;
+                    case kXOnNeeded :	port->RXOstate=kXOffSent;	break;
+                    default :		break;
+                }
+            } else if ( port->FlowControl & PD_RS232_A_DTR) {
+                state &= ~PD_RS232_S_DTR;
+            }
+            break;
+        case 0 : break;
+    }
+
+    return state;
+}
+
+
