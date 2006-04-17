@@ -111,9 +111,23 @@ enum tXO_State {
 //#define NEEDS_XON        2
 //#define SENT_XON        -2
 
-#define INTERRUPT_BUFF_SIZE 1
+#define kStateTransientMask	0x74
+#define kBreakError			0x04
+#define kFrameError			0x10
+#define kParityError		0x20
+#define kOverrunError		0x40
+
+#define kCTS				0x80
+#define kDSR				0x02
+#define kRI					0x08
+#define kDCD				0x01
+#define kHandshakeInMask	((UInt32)( PD_RS232_S_CTS | PD_RS232_S_DSR | PD_RS232_S_CAR | PD_RS232_S_RI  ))
+
+
+#define INTERRUPT_BUFF_SIZE 10
 #define USBLapPayLoad       2048
 
+#define kUART_STATE			0x08
 
 #define SET_LINE_REQUEST_TYPE		0x21
 #define SET_LINE_REQUEST			0x20
@@ -137,7 +151,8 @@ enum tXO_State {
 #define VENDOR_READ_REQUEST_TYPE	0xc0
 #define VENDOR_READ_REQUEST			0x01
 
-
+#define SIEMENS_VENDOR_ID	0x11f5
+#define SIEMENS_PRODUCT_ID_X65	0x0003
 
 
 enum pl2303_type {
@@ -204,6 +219,8 @@ typedef struct
 {
 	enum pl2303_type type;
     UInt32          State;
+	UInt8          lineState;
+
     UInt32          WatchStateMask;
     IOLock          *serialRequestLock;
 
