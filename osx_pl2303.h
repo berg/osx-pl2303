@@ -121,7 +121,7 @@ enum tXO_State {
 #define kDSR				0x02
 #define kRI					0x08
 #define kDCD				0x01
-#define kHandshakeInMask	((UInt32)( PD_RS232_S_CTS | PD_RS232_S_DSR | PD_RS232_S_CAR | PD_RS232_S_RI  ))
+#define kHandshakeInMask	((UInt32)( PD_RS232_S_CTS | PD_RS232_S_DSR | PD_RS232_S_CAR | PD_RS232_S_RI  )) 
 
 
 #define INTERRUPT_BUFF_SIZE 10

@@ -25,6 +25,12 @@
  * - AppleRS232Serial Copyright (c) 2002 Apple Computer, Inc. All rights reserved.
  * - AppleUSBIrda Copyright (c) 2000 Apple Computer, Inc. All rights reserved.
  *
+ *
+ * WARNING
+ * - zorg ervoor dat de omgeving zo snel mogelijk de status lijnen ophaalt
+ * wanneer een tty wordt geopend zal het os wachten totdat DCD hoog is. Bij cu is dit niet het geval
+ *
+ *
  * Tests:
  * - Driver only tested with ATEN UC-RS232A, but should support other PL2303 based USB to RS232 converters
  *
@@ -226,7 +232,7 @@ bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
 		type = type_1;
 	else if ( deviceClass->unsigned8BitValue() == 0xFF)
 		type = type_1;
-	IOLog("%s(%p)::start - device type: %d\n", getName(), this, type);
+	DEBUG_IOLog(3,"%s(%p)::start - device type: %d\n", getName(), this, type);
     fPort->type = type;
 
 	fUSBStarted = true;  
@@ -358,13 +364,10 @@ IOReturn nl_bjaelectronics_driver_PL2303::privateWatchState( PortInfo_t *port, U
     DEBUG_IOLog(4,"%s(%p)::privateWatchState\n", getName(), this);
 	
     watchState              = *state;
-	
+
 	// hack to get around problem with carrier detection - Do we need this hack ??
 	
-    if ( *state | 0x40 )    /// mlj ??? PD_S_RXQ_FULL?
-	{
-		port->State |= 0x40;
-	}
+
 	
     if ( !(mask & (PD_S_ACQUIRED | PD_S_ACTIVE)) )
 	{
@@ -377,8 +380,11 @@ IOReturn nl_bjaelectronics_driver_PL2303::privateWatchState( PortInfo_t *port, U
     {
 	    // Check port state for any interesting bits with watchState value
 	    // NB. the '^ ~' is a XNOR and tests for equality of bits.
-	    
+		DEBUG_IOLog(4,"%s(%p)::privateWatchState :watchState %p port->State %p mask %p\n", getName(), this, watchState,port->State,mask );
+
 		foundStates = (watchState ^ ~port->State) & mask;
+		DEBUG_IOLog(4,"%s(%p)::privateWatchState :foundStates %p \n", getName(), this, foundStates );
+
 		if ( foundStates )
 		{
 			*state = port->State;
@@ -420,7 +426,8 @@ IOReturn nl_bjaelectronics_driver_PL2303::privateWatchState( PortInfo_t *port, U
 	
     port->WatchStateMask = 0;
 	fCommandGate->commandWakeup((void *)&port->State);
-    
+	DEBUG_IOLog(4,"%s(%p)::privateWatchState end\n", getName(), this);
+ 
     return rtn;
     
 }/* end privateWatchState */
@@ -672,8 +679,8 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 //	rtn =  fpDevice->DeviceRequest(&request);
 //	DEBUG_IOLog(4,"%s(%p)::startSerial - chip clean return: %p \n", getName(), this,  rtn);
 	
-	
-	request.bmRequestType = VENDOR_WRITE_REQUEST_TYPE; // USBmakebmRequestType(kUSBOut, kUSBClass, kUSBInterface);
+// VIND DIT TERUG!!!	
+/*	request.bmRequestType = VENDOR_WRITE_REQUEST_TYPE; // USBmakebmRequestType(kUSBOut, kUSBClass, kUSBInterface);
     request.bRequest = VENDOR_WRITE_REQUEST;
 	request.wValue =  0; 
 	request.wIndex = 0x61;
@@ -681,7 +688,7 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	request.pData = NULL;
 	rtn =  fpDevice->DeviceRequest(&request);
 	DEBUG_IOLog(1,"%s(%p)::setSerialConfiguration - return VENDOR_WRITE_REQUEST: %p \n", getName(), this,  rtn);
-
+*/
 			
 	// open the pipe endpoints
 	if (!allocateResources() ) {
@@ -1468,9 +1475,14 @@ void nl_bjaelectronics_driver_PL2303::changeState( PortInfo_t *port, UInt32 stat
                 }
             }
         }
-		
+	USBLog(1,"state before: %p mask %p \n",state,mask);
+
     state = (port->State & ~mask) | (state & mask); // compute the new state
+	USBLog(1,"state after: %p \n",state);
+
     delta = state ^ port->State;                    // keep a copy of the diffs
+	USBLog(1,"state port: %p delta %p \n",port->State, delta);
+
     port->State = state;
 
 	if (delta & ( PD_RS232_S_DTR | PD_RS232_S_RFR )){
@@ -1484,7 +1496,7 @@ void nl_bjaelectronics_driver_PL2303::changeState( PortInfo_t *port, UInt32 stat
 	{
 		fCommandGate->commandWakeup((void *)&fPort->State);
 	}
-    DEBUG_IOLog(6,"%s(%p)::changeState delta: %p\n", getName(), this, delta);
+    DEBUG_IOLog(1,"%s(%p)::changeState delta: %p Port->State: %p\n", getName(), this, delta, port->State);
 
 	// if any modem control signals changed, we need to do an setControlLines()
 
@@ -1790,6 +1802,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::setStateGated( UInt32 state, UInt32 ma
 	{
 	    // ignore any bits that are read-only
 		mask &= (~port->FlowControl & PD_RS232_A_MASK) | PD_S_MASK;
+		DEBUG_IOLog(1,"%s(%p)::setStateGated mask: %p state %p ", getName(), this,mask, state);
 		
 		if ( mask)
 			changeState( port, state, mask );
@@ -1819,7 +1832,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::setStateGated( UInt32 state, UInt32 ma
 IOReturn nl_bjaelectronics_driver_PL2303::watchState(UInt32 *state, UInt32 mask, void *refCon)
 {
     IOReturn 	ret;
-    DEBUG_IOLog(4,"%s(%p)::watchState\n", getName(), this);
+    DEBUG_IOLog(4,"%s(%p)::watchState state %p mask  %p\n", getName(), this, *state, mask);
 	    
     if (!state) 
         return kIOReturnBadArgument;
@@ -1868,7 +1881,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::watchStateAction(OSObject *owner, void
 IOReturn nl_bjaelectronics_driver_PL2303::watchStateGated( UInt32 *state, UInt32 mask)
 {
     IOReturn    ret = kIOReturnNotOpen;
-    DEBUG_IOLog(4,"%s(%p)::watchStateGated\n", getName(), this);
+    DEBUG_IOLog(4,"%s(%p)::watchStateGated state: %p mask: %p\n", getName(), this, *state, mask);
 	
 	
     if ( readPortState( fPort ) & PD_S_ACQUIRED )
@@ -2907,7 +2920,7 @@ void nl_bjaelectronics_driver_PL2303::dataWriteComplete( void *obj, void *param,
 //      Outputs:    None
 //
 //      Desc:       Interrupt pipe read. Interrupts are used for reading handshake signals. see linux driver
-//                  NOT IMPLEMENTED
+//                  
 //
 /****************************************************************************************************/
 
@@ -2950,7 +2963,9 @@ void nl_bjaelectronics_driver_PL2303::interruptReadComplete( void *obj, void *pa
 			if (buf[status_idx] & kDSR) stat |= PD_RS232_S_DSR;
 			if (buf[status_idx] & kRI)  stat |= PD_RS232_S_RI;
 			if (buf[status_idx] & kDCD) stat |= PD_RS232_S_CAR;
-            me->setStateGated( stat, kHandshakeInMask, port);
+			DATA_IOLog(1,"nl_bjaelectronics_driver_PL2303: HANDSHAKE State: %p mask: %p ",stat, kHandshakeInMask);
+			
+            me->setStateGated( stat, kHandshakeInMask , port); //kHandshakeInMask
 
 		}
 		
@@ -3851,15 +3866,15 @@ IOReturn nl_bjaelectronics_driver_PL2303::setControlLines( PortInfo_t *port ){
 	IOReturn rtn;
 	IOUSBDevRequest request;
 
-    DEBUG_IOLog(4,"%s(%p)::setControlLines\n", getName(), this );
+    DEBUG_IOLog(4,"%s(%p)::setControlLines state %p \n", getName(), this, state );
 	
     UInt8 value=0;
 
     if (state & PD_RS232_S_DTR)  { value |= kCONTROL_DTR;
-//	    IOLog("setControlLines DTR ON \n" );
+	    DEBUG_IOLog(6,"setControlLines DTR ON \n" );
 }
     if (state & PD_RS232_S_RFR)  {value |= kCONTROL_RTS;
-//    	    IOLog("setControlLines RTS ON \n" );
+    	    DEBUG_IOLog(6,"setControlLines RTS ON \n" );
 }
 	
 
