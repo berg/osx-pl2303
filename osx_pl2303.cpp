@@ -145,6 +145,7 @@ IOService *nl_bjaelectronics_driver_PL2303::probe(IOService *provider, SInt32 *s
 bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
 {
     enum pl2303_type type = type_0;
+    IOReturn rtn = kIOReturnSuccess;
 
     fTerminate = false;     // Make sure we don't think we're being terminated
     fPort = NULL;
@@ -223,7 +224,7 @@ bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
     fCommandGate->enable();	
 
     OSNumber *	deviceClass = (OSNumber *) fpDevice->getProperty(kUSBDeviceClass);
-	DEBUG_IOLog(6,"%s(%p)::start - GetMaxPacketSize: %p DeviceClass %p\n", getName(), this, fpDevice->GetMaxPacketSize(), deviceClass->unsigned8BitValue() );
+	DEBUG_IOLog(5,"%s(%p)::start - GetMaxPacketSize: %p DeviceClass %p\n", getName(), this, fpDevice->GetMaxPacketSize(), deviceClass->unsigned8BitValue() );
 	if ( deviceClass->unsigned8BitValue() == 0x02)
 		type = type_0;
 	else if ( fpDevice->GetMaxPacketSize() == 0x40)
@@ -237,7 +238,21 @@ bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
 
 	fUSBStarted = true;  
 	
+	DEBUG_IOLog(3,"%s(%p)::start - Allocate resources \n", getName(), this);
+
+	// open the pipe endpoints
+	if (!allocateResources() ) {
+		IOLog("%s(%p)::start Allocate resources failed\n", getName(), this);
+		goto	Fail;
+	}
 	
+	// Read the data-in interrupt pipe
+    if(!fPort) goto Fail;
+
+	if(!fpinterruptPipeMDP) goto Fail;
+	rtn = fpInterruptPipe->Read(fpinterruptPipeMDP, &finterruptCompletionInfo, NULL );
+    if( !(rtn == kIOReturnSuccess) ) goto Fail;
+		
 	return true;
 	
 Fail:
@@ -277,22 +292,30 @@ Fail:
 void nl_bjaelectronics_driver_PL2303::stop( IOService *provider )
 {
 	DEBUG_IOLog(4,"%s(%p)::Stopping\n", getName(), this);
-    
+    if (fpInterruptPipe){    
+		fpInterruptPipe->Abort();}
+    DEBUG_IOLog(5,"%s(%p)::stopPipes fpInterruptPipe succeed\n", getName(), this);
+
+    if (fpPipeOutMDP != NULL)               // better test for releaseResources?
+    {
+		releaseResources( );
+    }
+	  
     fUSBStarted = false;        // reset usb start/stop flag for CheckSerialState
     CheckSerialState();         // turn serial off, release resources
-	DEBUG_IOLog(6,"%s(%p)::stop  CheckSerialState succeed\n", getName(), this);
+	DEBUG_IOLog(5,"%s(%p)::stop  CheckSerialState succeed\n", getName(), this);
     
     if (fCommandGate)
     {
         fCommandGate->release();
         fCommandGate = NULL;
-		DEBUG_IOLog(6,"%s(%p)::stop Command gate destroyed\n", getName(), this);
+		DEBUG_IOLog(5,"%s(%p)::stop Command gate destroyed\n", getName(), this);
     }
     if (fWorkLoop)
     {
         fWorkLoop->release();
         fWorkLoop = NULL;
-		DEBUG_IOLog(6,"%s(%p)::stop workloop destroyed\n", getName(), this);
+		DEBUG_IOLog(5,"%s(%p)::stop workloop destroyed\n", getName(), this);
     }	
 	
     destroySerialStream();      // release the bsd tty
@@ -303,7 +326,7 @@ void nl_bjaelectronics_driver_PL2303::stop( IOService *provider )
 	{
 		fpInterface->release();     // retain done in ConfigureDevice
 		fpInterface = NULL; 
-		DEBUG_IOLog(6,"%s(%p)::stop fpInterface destroyed\n", getName(), this);
+		DEBUG_IOLog(5,"%s(%p)::stop fpInterface destroyed\n", getName(), this);
 	}
 	
 	// release our power manager state - NOT IMPLEMENTED
@@ -634,7 +657,7 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	request.wLength = 1; \
 	request.pData = buf; \
 	rtn =  fpDevice->DeviceRequest(&request); \
-	DEBUG_IOLog(6,"%s(%p)::startSerial FISH 0x%x:0x%x:0x%x:0x%x  %d - %x\n", getName(), this,a,b,c,d,rtn,buf[0]);
+	DEBUG_IOLog(5,"%s(%p)::startSerial FISH 0x%x:0x%x:0x%x:0x%x  %d - %x\n", getName(), this,a,b,c,d,rtn,buf[0]);
 
 #define SOUP(a,b,c,d)								\
 	request.bmRequestType = a; \
@@ -644,7 +667,7 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	request.wLength = 0; \
 	request.pData = NULL; \
 	rtn =  fpDevice->DeviceRequest(&request); \
-	DEBUG_IOLog(6,"%s(%p)::startSerial SOUP 0x%x:0x%x:0x%x:0x%x  %d\n", getName(), this,a,b,c,d,rtn);
+	DEBUG_IOLog(5,"%s(%p)::startSerial SOUP 0x%x:0x%x:0x%x:0x%x  %d\n", getName(), this,a,b,c,d,rtn);
 
 
 	FISH (VENDOR_READ_REQUEST_TYPE, VENDOR_READ_REQUEST, 0x8484, 0);
@@ -690,11 +713,7 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	DEBUG_IOLog(1,"%s(%p)::setSerialConfiguration - return VENDOR_WRITE_REQUEST: %p \n", getName(), this,  rtn);
 */
 			
-	// open the pipe endpoints
-	if (!allocateResources() ) {
-		IOLog("%s(%p)::startSerial Allocate resources failed\n", getName(), this);
-		goto	Fail;
-	}
+
     
     startPipes();                           // start reading on the usb pipes
 /*	
@@ -718,10 +737,7 @@ void nl_bjaelectronics_driver_PL2303::stopSerial()
 	DEBUG_IOLog(4,"%s(%p)::stopSerial\n", getName(), this);
     stopPipes();                            // stop reading on the usb pipes
 
-    if (fpPipeOutMDP != NULL)               // better test for releaseResources?
-    {
-		releaseResources( );
-    }
+
 	DEBUG_IOLog(5,"%s(%p)::stopSerial stopSerial succeed\n", getName(), this);
     
 Fail:
@@ -1044,6 +1060,8 @@ void nl_bjaelectronics_driver_PL2303::SetStructureDefaults( PortInfo_t *port, bo
 	/* These are initialized when the port is created and shouldn't be reinitialized. */
     if ( Init )
 	{
+		DEBUG_IOLog(1,"%s(%p)::SetStructureDefaults INIT\n", getName(), this);
+
 		port->FCRimage          = 0x00;
 		port->IERmask           = 0x00;
 		
@@ -1211,7 +1229,6 @@ bool nl_bjaelectronics_driver_PL2303::startPipes( void )
     DEBUG_IOLog(4,"%s(%p)::startPipes\n", getName(), this);
     
     if(!fPort) goto Fail;
-    if(!fpinterruptPipeMDP) goto Fail;
     if(!fpPipeInMDP) goto Fail;
     if(!fpPipeOutMDP) goto Fail;
 
@@ -1220,19 +1237,7 @@ bool nl_bjaelectronics_driver_PL2303::startPipes( void )
 
     if( !(rtn == kIOReturnSuccess) ) goto Fail;
 
-	// Read the data-in interrupt pipe
 
-		USBLog(1,"Start het interrupt pijpje: status %p \n", fpInterruptPipe->GetPipeStatus());
-	//		rtn = fpInterruptPipe->ClearPipeStall(false);
-
-		rtn = fpInterruptPipe->Read(fpinterruptPipeMDP, &finterruptCompletionInfo, NULL );
-		USBLog(1,"Het resultaat: %p status: %p\n",rtn, fpInterruptPipe->GetPipeStatus());
-//	rtn = fpInterruptPipe->Read( fpinterruptPipeMDP, &finterruptCompletionInfo, NULL );
-
-    USBLog(1," endpoint: %p type: %p packetsize %d interval %d", fpInterruptPipe->GetEndpointNumber(),fpInterruptPipe->GetType(), fpInterruptPipe->GetMaxPacketSize() ,fpInterruptPipe->GetInterval());
-
-    if( !(rtn == kIOReturnSuccess) ) goto Fail;
- //  	fpInterruptPipe->ClearStall();
  
     // is this really referenced by anyone??
     fReadActive = true;     // remember if we did a read
@@ -1250,18 +1255,18 @@ Fail:
 //
 void nl_bjaelectronics_driver_PL2303::stopPipes()
 {
-    DEBUG_IOLog(6,"%s(%p)::stopPipes fpInPipe %p\n", getName(), this, fpInPipe);
+    DEBUG_IOLog(5,"%s(%p)::stopPipes fpInPipe %p\n", getName(), this, fpInPipe);
     if (fpInPipe){     
 	    fpInPipe->Abort();}
-	DEBUG_IOLog(6,"%s(%p)::stopPipes fpOutPipe %p\n", getName(), this, fpOutPipe);
-
+	DEBUG_IOLog(5,"%s(%p)::stopPipes fpOutPipe %p\n", getName(), this, fpOutPipe);
+	
     if (fpOutPipe){        		
 		fpOutPipe->Abort();}
-	DEBUG_IOLog(1,"%s(%p)::stopPipes fpInterruptPipe %p\n", getName(), this, fpInterruptPipe);
+	DEBUG_IOLog(5,"%s(%p)::stopPipes succeed\n", getName(), this);
+  
 
-    if (fpInterruptPipe){    
-		fpInterruptPipe->Abort();}
-    DEBUG_IOLog(5,"%s(%p)::stopPipes succeed\n", getName(), this);
+
+
 
 }
 
@@ -1423,12 +1428,14 @@ IOReturn nl_bjaelectronics_driver_PL2303::message( UInt32 type, IOService *provi
 UInt32 nl_bjaelectronics_driver_PL2303::readPortState( PortInfo_t *port )
 {
     UInt32              returnState;
-	DEBUG_IOLog(6,"nl_bjaelectronics_driver_PL2303::readPortState\n", returnState );
+	DEBUG_IOLog(6,"nl_bjaelectronics_driver_PL2303::readPortState IOLockLock( port->serialRequestLock );\n" );
 
     IOLockLock( port->serialRequestLock );
 	DEBUG_IOLog(6,"nl_bjaelectronics_driver_PL2303::readPortState port->State\n", returnState );
 
 	returnState = port->State;
+	DEBUG_IOLog(6,"nl_bjaelectronics_driver_PL2303::readPortState IOLockUnLock( port->serialRequestLock );\n" );
+
 	IOLockUnlock( port->serialRequestLock);
 	
 	DEBUG_IOLog(6,"nl_bjaelectronics_driver_PL2303::readPortState returnstate: %p \n", returnState );
@@ -1456,7 +1463,36 @@ void nl_bjaelectronics_driver_PL2303::changeState( PortInfo_t *port, UInt32 stat
 {
     UInt32              delta;
     DEBUG_IOLog(6,"%s(%p)::changeState\n", getName(), this);
+	
+	DEBUG_IOLog(6,"nl_bjaelectronics_driver_PL2303::changeState IOLockLock( port->serialRequestLock );\n" );
+
 	IOLockLock( port->serialRequestLock );
+	
+
+	DEBUG_IOLog(6,"state before: %p mask %p \n",state,mask);
+
+    state = (port->State & ~mask) | (state & mask); // compute the new state
+	DEBUG_IOLog(6,"state after: %p \n",state);
+
+    delta = state ^ port->State;                    // keep a copy of the diffs
+	DEBUG_IOLog(6,"state port: %p delta %p \n",port->State, delta);
+
+    port->State = state;
+
+
+	// Wake up all threads asleep on WatchStateMask
+	
+    if ( delta & port->WatchStateMask )
+	{
+		fCommandGate->commandWakeup((void *)&fPort->State);
+	}
+
+
+	DEBUG_IOLog(6,"nl_bjaelectronics_driver_PL2303::changeState IOLockUnLock( port->serialRequestLock );\n" );
+		
+    IOLockUnlock( port->serialRequestLock );
+
+	// if any modem control signals changed, we need to do an setControlLines()
 	
 	if ((mask & PD_RS232_S_DTR) && ((port->FlowControl & PD_RS232_A_DTR) != PD_RS232_A_DTR))
         {
@@ -1475,33 +1511,13 @@ void nl_bjaelectronics_driver_PL2303::changeState( PortInfo_t *port, UInt32 stat
                 }
             }
         }
-	USBLog(1,"state before: %p mask %p \n",state,mask);
-
-    state = (port->State & ~mask) | (state & mask); // compute the new state
-	USBLog(1,"state after: %p \n",state);
-
-    delta = state ^ port->State;                    // keep a copy of the diffs
-	USBLog(1,"state port: %p delta %p \n",port->State, delta);
-
-    port->State = state;
-
+			
 	if (delta & ( PD_RS232_S_DTR | PD_RS232_S_RFR )){
-		USBLog(1,"setControlLines aanroepen\n");
+		DEBUG_IOLog(5,"setControlLines aanroepen\n");
         setControlLines( port );	
-}
+    }
+    DEBUG_IOLog(6,"%s(%p)::changeState delta: %p Port->State: %p\n", getName(), this, delta, port->State);
 	
-	// Wake up all threads asleep on WatchStateMask
-	
-    if ( delta & port->WatchStateMask )
-	{
-		fCommandGate->commandWakeup((void *)&fPort->State);
-	}
-    DEBUG_IOLog(1,"%s(%p)::changeState delta: %p Port->State: %p\n", getName(), this, delta, port->State);
-
-	// if any modem control signals changed, we need to do an setControlLines()
-
-		
-    IOLockUnlock( port->serialRequestLock );
     return;
     
 }/* end changeState */
@@ -1583,7 +1599,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::acquirePortGated( bool sleep, void *re
     
     for (;;)
 	{
-        DEBUG_IOLog(6,"%s(%p)::acquirePortGated readportstate\n", getName(), this);
+        DEBUG_IOLog(5,"%s(%p)::acquirePortGated readportstate\n", getName(), this);
 
 		busyState = readPortState( port ) & PD_S_ACQUIRED;
 		if ( !busyState )
@@ -1611,11 +1627,11 @@ IOReturn nl_bjaelectronics_driver_PL2303::acquirePortGated( bool sleep, void *re
 	} /* end for */
     
     fSessions++;    //bump number of active sessions and turn on clear to send
-    DEBUG_IOLog(6,"%s(%p)::acquirePortGated change state\n", getName(), this);
+ //   DEBUG_IOLog(5,"%s(%p)::acquirePortGated change state\n", getName(), this);
 
-    changeState( port, PD_RS232_S_CTS, PD_RS232_S_CTS);
+//    changeState( port, PD_RS232_S_CTS, PD_RS232_S_CTS);
 
-    DEBUG_IOLog(6,"%s(%p)::acquirePortGated check serial state\n", getName(), this);
+    DEBUG_IOLog(5,"%s(%p)::acquirePortGated check serial state\n", getName(), this);
 
 	CheckSerialState();       // turn serial on/off if appropriate
     
@@ -1730,7 +1746,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::setState(UInt32 state, UInt32 mask, vo
 {
     PortInfo_t *port = (PortInfo_t *) refCon;
     IOReturn	ret;
-    DEBUG_IOLog(4,"%s(%p)::setState\n", getName(), this);
+    DEBUG_IOLog(4,"%s(%p)::setState state %p mask %p\n", getName(), this, mask, state);
     	
 	// Cannot acquire or activate via setState
     
@@ -2015,7 +2031,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 			
 			old = port->FlowControl;				    // save old modes for unblock checks
             port->FlowControl = data & (CAN_BE_AUTO | CAN_NOTIFY);  // new values, trimmed to legal values
-			DEBUG_IOLog(4,"%s(%p)::executeEvent - PD_E_FLOW_CONTROL %p\n", getName(), this, port->FlowControl );
+			DEBUG_IOLog(4,"%s(%p)::executeEvent - PD_E_FLOW_CONTROL port->FlowControl %p\n", getName(), this, port->FlowControl );
 			
 			// now cleanup if we've blocked RX or TX with the previous style flow control and we're switching to a different kind
 			// we have 5 different flow control modes to check and unblock; 3 on rx, 2 on tx
@@ -2065,6 +2081,8 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 //					IODBDMAContinue(fPort.TxDBDMAChannel.dmaBase);		// Continue transfer
 				} 
 				changeState( port, (UInt32)PD_S_ACTIVE, (UInt32)PD_S_ACTIVE ); 
+
+			DEBUG_IOLog(4,"%s(%p)::executeEvent - PD_E_FLOW_CONTROL end port->FlowControl %p\n", getName(), this, port->FlowControl );
 
 			}
 		
@@ -2792,7 +2810,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::dequeueDataAction(OSObject *owner, voi
 
 UInt32 nl_bjaelectronics_driver_PL2303::getState(void *refCon)
 {    
-	DEBUG_IOLog(4,"%s(%p)::getState\n", getName(), this);
+	DEBUG_IOLog(6,"%s(%p)::getState\n", getName(), this);
 
 	PortInfo_t  *port = (PortInfo_t *) refCon;
     UInt32      state;
@@ -2801,7 +2819,7 @@ UInt32 nl_bjaelectronics_driver_PL2303::getState(void *refCon)
 	
     state = readPortState( port ) & EXTERNAL_MASK;
     
-    DEBUG_IOLog(4,"%s(%p)::getState-->State: %x\n", getName(), this, state );
+    DEBUG_IOLog(6,"%s(%p)::getState-->State: %x\n", getName(), this, state );
     
     return state;
 }/* end getState */
@@ -2845,7 +2863,9 @@ IOReturn nl_bjaelectronics_driver_PL2303::startTransmit(UInt32 control_length, U
 	UInt32 buflen;
 	buflen = fCount;
 	buf = &fPipeOutBuffer[0];
-	IOLockLock( fPort->serialRequestLock );
+//	DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::startTransmit IOLockLock( port->serialRequestLock );\n" );
+	
+//	IOLockLock( fPort->serialRequestLock );
 	DATA_IOLog(3,"nl_bjaelectronics_driver_PL2303: Send: ");
 	while ( buflen ){
 		unsigned char c = *buf;
@@ -2854,7 +2874,9 @@ IOReturn nl_bjaelectronics_driver_PL2303::startTransmit(UInt32 control_length, U
 		buflen--;
 	}
 	DATA_IOLog(3,"\n");	
-	IOLockUnlock( fPort->serialRequestLock );
+//	DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::startTransmit IOLockUnLock( port->serialRequestLock );\n" );
+
+//	IOLockUnlock( fPort->serialRequestLock );
 
 #endif	
     ior = fpOutPipe->Write( fpPipeOutMDP, 1000, 1000, &fWriteCompletionInfo );  // 1 second timeouts
@@ -2948,7 +2970,9 @@ void nl_bjaelectronics_driver_PL2303::interruptReadComplete( void *obj, void *pa
 		} else {
 
 //#ifdef DATALOG
-			IOLockLock( me->fPort->serialRequestLock );
+//			DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::interruptReadComplete IOLockLock( port->serialRequestLock );\n" );
+
+//			IOLockLock( me->fPort->serialRequestLock );
 			UInt8 *buf;
 			UInt32 buflen;
 			buflen = dLen;
@@ -2956,7 +2980,9 @@ void nl_bjaelectronics_driver_PL2303::interruptReadComplete( void *obj, void *pa
 			DATA_IOLog(1,"nl_bjaelectronics_driver_PL2303: Interrupt: ");
 			unsigned char c = buf[status_idx];
 		    DATA_IOLog(1,"[%02x] ",c);	
-			IOLockUnlock( me->fPort->serialRequestLock );
+//			DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::interruptReadComplete IOLockUnLock( port->serialRequestLock );\n" );
+
+//			IOLockUnlock( me->fPort->serialRequestLock );
 //#endif	
 			me->fPort->lineState = buf[status_idx];
 			if (buf[status_idx] & kCTS) stat |= PD_RS232_S_CTS;
@@ -3007,7 +3033,9 @@ void nl_bjaelectronics_driver_PL2303::dataReadComplete( void *obj, void *param, 
 		if ( dtlength > 0 )
 		{
 #ifdef DATALOG
-			IOLockLock( me->fPort->serialRequestLock );
+//			DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::dataReadComplete IOLockLock( port->serialRequestLock );\n" );
+
+//			IOLockLock( me->fPort->serialRequestLock );
 			UInt8 *buf;
 			UInt32 buflen;
 			buflen = dtlength;
@@ -3020,7 +3048,9 @@ void nl_bjaelectronics_driver_PL2303::dataReadComplete( void *obj, void *param, 
 				buflen--;
 			}
 			DATA_IOLog(3,"\n");	
-			IOLockUnlock( me->fPort->serialRequestLock );
+//			DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::dataReadComplete IOLockUnLock( port->serialRequestLock );\n" );
+
+//			IOLockUnlock( me->fPort->serialRequestLock );
 #endif	
 			ior = me->addtoQueue( &me->fPort->RX, &me->fPipeInBuffer[0], dtlength );
 		}
@@ -3330,9 +3360,13 @@ QueueStatus nl_bjaelectronics_driver_PL2303::addBytetoQueue( CirQueue *Queue, ch
     DEBUG_IOLog(4,"nl_bjaelectronics_driver_PL2303(%p)::AddBytetoQueue\n", this );
 	
     if ( !(fPort && fPort->serialRequestLock ) ) goto Fail;
+	DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::addBytetoQueue IOLockLock( port->serialRequestLock );\n" );
+	
     IOLockLock( fPort->serialRequestLock );
 	
     if ( (Queue->NextChar == Queue->LastChar) && Queue->InQueue ) {
+		DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::addBytetoQueue IOLockUnLock( port->serialRequestLock ); kQueueFull\n" );
+
 		IOLockUnlock( fPort->serialRequestLock);
 		return kQueueFull;
 	}
@@ -3344,6 +3378,8 @@ QueueStatus nl_bjaelectronics_driver_PL2303::addBytetoQueue( CirQueue *Queue, ch
 	
     if ( Queue->NextChar >= Queue->End )
 		Queue->NextChar =  Queue->Start;
+
+	DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::addBytetoQueue IOLockUnLock( port->serialRequestLock ); kQueueNoError\n" );
 	
     IOLockUnlock( fPort->serialRequestLock);
     return kQueueNoError;
@@ -3370,11 +3406,15 @@ QueueStatus nl_bjaelectronics_driver_PL2303::getBytetoQueue( CirQueue *Queue, UI
     DEBUG_IOLog(4,"%s(%p)::GetBytetoQueue\n", getName(), this );
 	
     if( !(fPort && fPort->serialRequestLock) ) goto Fail;
+	DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::getBytetoQueue IOLockLock( port->serialRequestLock ); \n" );
+
     IOLockLock( fPort->serialRequestLock );
 	
 	/* Check to see if the queue has something in it.   */
 	
     if ( (Queue->NextChar == Queue->LastChar) && !Queue->InQueue ) {
+		DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::getBytetoQueue IOLockUnLock( port->serialRequestLock ); kQueueEmpty\n" );
+
 		IOLockUnlock(fPort->serialRequestLock);
 		return kQueueEmpty;
 	}
@@ -3386,6 +3426,8 @@ QueueStatus nl_bjaelectronics_driver_PL2303::getBytetoQueue( CirQueue *Queue, UI
 	
     if ( Queue->LastChar >= Queue->End )
 		Queue->LastChar =  Queue->Start;
+	
+	DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::getBytetoQueue IOLockUnLock( port->serialRequestLock ); kQueueNoError\n" );
 	
     IOLockUnlock(fPort->serialRequestLock);
     return kQueueNoError;
@@ -3542,13 +3584,16 @@ size_t nl_bjaelectronics_driver_PL2303::removefromQueue( CirQueue *Queue, UInt8 
 size_t nl_bjaelectronics_driver_PL2303::freeSpaceinQueue( CirQueue *Queue )
 {
     size_t  retVal = 0;
-    DEBUG_IOLog(4,"%s(%p)::FreeSpaceinQueue\n", getName(), this );
+    DEBUG_IOLog(6,"%s(%p)::FreeSpaceinQueue\n", getName(), this );
 	
     if( !(fPort && fPort->serialRequestLock ) ) goto Fail;
+	DEBUG_IOLog(6,"nl_bjaelectronics_driver_PL2303::freeSpaceinQueue IOLockLock( port->serialRequestLock );\n");
+
 	IOLockLock( fPort->serialRequestLock );
 	
     retVal = Queue->Size - Queue->InQueue;
-    
+ 	DEBUG_IOLog(6,"nl_bjaelectronics_driver_PL2303::freeSpaceinQueue IOLockUnLock( port->serialRequestLock );\n");
+   
     IOLockUnlock(fPort->serialRequestLock);
     
 Fail:
@@ -3570,7 +3615,7 @@ Fail:
 
 size_t nl_bjaelectronics_driver_PL2303::usedSpaceinQueue( CirQueue *Queue )
 {
-    DEBUG_IOLog(4,"%s(%p)::UsedSpaceinQueue\n", getName(), this );
+    DEBUG_IOLog(6,"%s(%p)::UsedSpaceinQueue\n", getName(), this );
 
     return Queue->InQueue;
     
@@ -3640,7 +3685,7 @@ void nl_bjaelectronics_driver_PL2303::checkQueues( PortInfo_t *port )
     UInt32	SW_FlowControl;
     UInt32	RTS_FlowControl;
     UInt32	DTR_FlowControl;
-    DEBUG_IOLog(4,"%s(%p)::CheckQueues\n", getName(), this );
+    DEBUG_IOLog(6,"%s(%p)::CheckQueues\n", getName(), this );
 	
     // Initialise the QueueState with the current state.
 	
@@ -3709,7 +3754,7 @@ void nl_bjaelectronics_driver_PL2303::checkQueues( PortInfo_t *port )
     {
         if ((SW_FlowControl) && (port->xOffSent))	    // unblock xon/xoff flow control
 			{
-				IOLog("GODVER XON AAN\n");
+				DEBUG_IOLog(1,"GODVER XON AAN\n");
 
 				port->xOffSent = false;
 				addBytetoQueue(&(port->TX), port->XONchar);
@@ -3738,7 +3783,7 @@ void nl_bjaelectronics_driver_PL2303::checkQueues( PortInfo_t *port )
     {
         if ((SW_FlowControl) && (!port->xOffSent))
 			{
-				IOLog("GODVER XOFF AAN\n");
+				DEBUG_IOLog(1,"GODVER XOFF AAN\n");
 			
 				port->xOffSent = true;
 				addBytetoQueue(&(port->TX), port->XOFFchar);
@@ -3871,10 +3916,10 @@ IOReturn nl_bjaelectronics_driver_PL2303::setControlLines( PortInfo_t *port ){
     UInt8 value=0;
 
     if (state & PD_RS232_S_DTR)  { value |= kCONTROL_DTR;
-	    DEBUG_IOLog(6,"setControlLines DTR ON \n" );
+	    DEBUG_IOLog(5,"setControlLines DTR ON \n" );
 }
     if (state & PD_RS232_S_RFR)  {value |= kCONTROL_RTS;
-    	    DEBUG_IOLog(6,"setControlLines RTS ON \n" );
+    	    DEBUG_IOLog(5,"setControlLines RTS ON \n" );
 }
 	
 
