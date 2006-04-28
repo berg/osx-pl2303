@@ -182,6 +182,7 @@ bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
         IOLog("%s(%p)::start - Provider isn't a USB device!!!\n", getName(), this);
         goto Fail;
     }
+
 	
     if (fpDevice->GetNumConfigurations() < 1)
     {
@@ -240,18 +241,8 @@ bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
 	
 	DEBUG_IOLog(3,"%s(%p)::start - Allocate resources \n", getName(), this);
 
-	// open the pipe endpoints
-	if (!allocateResources() ) {
-		IOLog("%s(%p)::start Allocate resources failed\n", getName(), this);
-		goto	Fail;
-	}
-	
-	// Read the data-in interrupt pipe
-    if(!fPort) goto Fail;
 
-	if(!fpinterruptPipeMDP) goto Fail;
-	rtn = fpInterruptPipe->Read(fpinterruptPipeMDP, &finterruptCompletionInfo, NULL );
-    if( !(rtn == kIOReturnSuccess) ) goto Fail;
+
 		
 	return true;
 	
@@ -291,16 +282,9 @@ Fail:
 
 void nl_bjaelectronics_driver_PL2303::stop( IOService *provider )
 {
-	DEBUG_IOLog(4,"%s(%p)::Stopping\n", getName(), this);
-    if (fpInterruptPipe){    
-		fpInterruptPipe->Abort();}
-    DEBUG_IOLog(5,"%s(%p)::stopPipes fpInterruptPipe succeed\n", getName(), this);
 
-    if (fpPipeOutMDP != NULL)               // better test for releaseResources?
-    {
-		releaseResources( );
-    }
-	  
+
+
     fUSBStarted = false;        // reset usb start/stop flag for CheckSerialState
     CheckSerialState();         // turn serial off, release resources
 	DEBUG_IOLog(5,"%s(%p)::stop  CheckSerialState succeed\n", getName(), this);
@@ -331,7 +315,7 @@ void nl_bjaelectronics_driver_PL2303::stop( IOService *provider )
 	
 	// release our power manager state - NOT IMPLEMENTED
 	//   PMstop();
-    
+
     super::stop( provider );
     return;
     
@@ -713,7 +697,12 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	DEBUG_IOLog(1,"%s(%p)::setSerialConfiguration - return VENDOR_WRITE_REQUEST: %p \n", getName(), this,  rtn);
 */
 			
-
+	// open the pipe endpoints
+	if (!allocateResources() ) {
+		IOLog("%s(%p)::start Allocate resources failed\n", getName(), this);
+		goto	Fail;
+	}
+	
     
     startPipes();                           // start reading on the usb pipes
 /*	
@@ -734,10 +723,31 @@ Fail:
 
 void nl_bjaelectronics_driver_PL2303::stopSerial()
 {
+	int i = 0;
+
 	DEBUG_IOLog(4,"%s(%p)::stopSerial\n", getName(), this);
     stopPipes();                            // stop reading on the usb pipes
 
+    if (fpPipeOutMDP != NULL)               // better test for releaseResources?
+    {
+		releaseResources( );
+    }
+	//Make our PL2303 clean. We don't know the right USB request due the lack of documentation :(
+	fUSBStarted = false;  
+	
+	DEBUG_IOLog(5,"%s(%p)::stopSerial close device-1\n", getName(), this);	
+	fpDevice->close( fpDevice );
+	DEBUG_IOLog(5,"%s(%p)::stopSerial reset device-1 \n", getName(), this);	
 
+	fpDevice->ResetDevice();
+	i = 0;
+	while (!fUSBStarted & (i < 10)) {	IOSleep(10); i++; }
+	fUSBStarted = false;  
+	DEBUG_IOLog(5,"%s(%p)::stopSerial close device-2 timout: %d \n", getName(), this, i);	
+	fpDevice->close( fpDevice );
+	DEBUG_IOLog(5,"%s(%p)::stopSerial reset device-2 \n", getName(), this);	
+	fpDevice->ResetDevice();
+	
 	DEBUG_IOLog(5,"%s(%p)::stopSerial stopSerial succeed\n", getName(), this);
     
 Fail:
@@ -861,12 +871,11 @@ bool nl_bjaelectronics_driver_PL2303::configureDevice( UInt8 numConfigs )
     if ( !fpInterface )
 	{
 		DEBUG_IOLog(4,"%s(%p)::configureDevice - Find next interface failed open device and reallocate objects\n", getName(), this);
-		/* Dirty solution to configure device if the interface objects are not yet allocated */
 		if (!fpDevice->open(fpDevice))
-		{
+			{
 			IOLog("%s(%p)::configureDevice - unable to open device for configuration \n", getName(), this);
 			goto Fail;
-		}	
+			}
 		IOReturn rtn =  fpDevice->SetConfiguration(fpDevice, fpDevice->GetFullConfigurationDescriptor(0)->bConfigurationValue, true);
 		if (rtn)
 		{
@@ -1237,7 +1246,13 @@ bool nl_bjaelectronics_driver_PL2303::startPipes( void )
 
     if( !(rtn == kIOReturnSuccess) ) goto Fail;
 
+	// Read the data-in interrupt pipe
+    if(!fPort) goto Fail;
 
+	if(!fpinterruptPipeMDP) goto Fail;
+	rtn = fpInterruptPipe->Read(fpinterruptPipeMDP, &finterruptCompletionInfo, NULL );
+    if( !(rtn == kIOReturnSuccess) ) goto Fail;
+	
  
     // is this really referenced by anyone??
     fReadActive = true;     // remember if we did a read
@@ -1255,6 +1270,11 @@ Fail:
 //
 void nl_bjaelectronics_driver_PL2303::stopPipes()
 {
+	DEBUG_IOLog(4,"%s(%p)::Stopping\n", getName(), this);
+    if (fpInterruptPipe){    
+		fpInterruptPipe->Abort();}
+    DEBUG_IOLog(5,"%s(%p)::stopPipes fpInterruptPipe succeed\n", getName(), this);
+	
     DEBUG_IOLog(5,"%s(%p)::stopPipes fpInPipe %p\n", getName(), this, fpInPipe);
     if (fpInPipe){     
 	    fpInPipe->Abort();}
@@ -1289,6 +1309,7 @@ enum {                                  // messageType for the callback routines
 
 IOReturn nl_bjaelectronics_driver_PL2303::message( UInt32 type, IOService *provider,  void *argument)
 {
+IOReturn err = kIOReturnSuccess;
     DEBUG_IOLog(4,"%s(%p)::message %p\n", getName(), this, type);
 
 	switch ( type )
@@ -1402,14 +1423,48 @@ IOReturn nl_bjaelectronics_driver_PL2303::message( UInt32 type, IOService *provi
 					DEBUG_IOLog(4,"%s(%p)::message - startSerial successful\n", getName(), this);
 				}
 			}	
-			break;			
-			
+			break;
+						
+		case kIOUSBMessagePortHasBeenReset:
+			DEBUG_IOLog(1,"%s(%p)::message - kIOUSBMessagePortHasBeenReset\n", getName(), this);
+//			if ( fpDevice && !fpDevice->isOpen(fpDevice) )
+//				{
+//				if ( !fpDevice->open(this) )
+//					{
+//					DEBUG_IOLog(1, "%s[%p]::message.  Can't open it, giving up",getName(), this);
+//					err = kIOReturnExclusiveAccess;
+//					goto Fail;
+//					}
+//				}
+				
+			if (fpDevice->GetNumConfigurations() < 1)
+				{
+				DEBUG_IOLog(1,"%s(%p)::message - no composite configurations\n", getName(), this);
+				err = kIOUSBConfigNotFound;
+				goto Fail;
+				}
+		
+			// Now configure it (leaves device suspended)
+			if( !configureDevice( fpDevice->GetNumConfigurations() ) ) 
+				{
+				err = kIOUSBConfigNotFound;
+				goto Fail;
+				}
+
+			fUSBStarted = true;  
+	
+			DEBUG_IOLog(1,"%s(%p)::message - Port reconfigurated\n", getName(), this);
+
+Fail:
+			return err;
+			break;
+
 		default:
 			DEBUG_IOLog(4,"%s(%p)::message - unknown message %p \n", getName(), this, type ); 
 			break;
     }
     
-    return kIOReturnSuccess;
+    return err;
 }
 
 
@@ -1757,7 +1812,16 @@ IOReturn nl_bjaelectronics_driver_PL2303::setState(UInt32 state, UInt32 mask, vo
 	
 	// ignore any bits that are read-only
 	
-	mask &= (~port->FlowControl & PD_RS232_A_MASK) | PD_S_MASK;
+	mask &= (~port->FlowControl & PD_RS232_A_MASK) | PD_S_MASK ;
+	
+	// always store handshakeline state
+	mask |=  kHandshakeInMask;
+	if (port->lineState & kCTS) state |= PD_RS232_S_CTS; else state &= ~( PD_RS232_S_CTS );
+	if (port->lineState & kDSR) state |= PD_RS232_S_DSR; else state &= ~( PD_RS232_S_DSR );
+	if (port->lineState & kRI)  state |= PD_RS232_S_RI; else state &= ~( PD_RS232_S_RI );
+	if (port->lineState & kDCD) state |= PD_RS232_S_CAR; else state &= ~( PD_RS232_S_CAR );			
+    DEBUG_IOLog(5,"%s(%p)::setState linestatestate %p mask %p state %p\n", getName(), this, port->lineState, mask, state);
+
 	if (mask)
 	{
 		retain();
@@ -1818,7 +1882,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::setStateGated( UInt32 state, UInt32 ma
 	{
 	    // ignore any bits that are read-only
 		mask &= (~port->FlowControl & PD_RS232_A_MASK) | PD_S_MASK;
-		DEBUG_IOLog(1,"%s(%p)::setStateGated mask: %p state %p ", getName(), this,mask, state);
+		DEBUG_IOLog(5,"%s(%p)::setStateGated mask: %p state %p ", getName(), this,mask, state);
 		
 		if ( mask)
 			changeState( port, state, mask );
@@ -2107,6 +2171,24 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 			if( setSerialConfiguration() ){
 				DEBUG_IOLog(4,"%s(%p)::executeEvent Set Serial Configuration failed\n", getName(), this);
 			}
+			
+/*		if ( (bool)data )
+		{
+			if ( !(state & PD_S_ACTIVE) )
+			{
+				SetStructureDefaults( port, FALSE );
+                                changeState( port, (UInt32)PD_S_ACTIVE, (UInt32)PD_S_ACTIVE ); // activate port
+				
+				USBSetControlLineState(true, true);			// set RTS and set DTR
+			}
+		} else {
+			if ( (state & PD_S_ACTIVE) )
+			{
+				changeState( port, 0, (UInt32)PD_S_ACTIVE );
+				
+				USBSetControlLineState(false, false);			// clear RTS and clear DTR
+			}
+		}*/
 			break;
 			
 		case PD_E_DATA_LATENCY:
@@ -2899,7 +2981,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::startTransmit(UInt32 control_length, U
 
 void nl_bjaelectronics_driver_PL2303::dataWriteComplete( void *obj, void *param, IOReturn rc, UInt32 remaining )
 {
-	DEBUG_IOLog(4,"nl_bjaelectronics_driver_PL2303::dataWriteComplete\n" );
+	DEBUG_IOLog(3,"nl_bjaelectronics_driver_PL2303::dataWriteComplete rc: %p\n", rc );
 
     nl_bjaelectronics_driver_PL2303  *me = (nl_bjaelectronics_driver_PL2303*)obj;
     Boolean done = true;                // write really finished?
@@ -2984,14 +3066,13 @@ void nl_bjaelectronics_driver_PL2303::interruptReadComplete( void *obj, void *pa
 
 //			IOLockUnlock( me->fPort->serialRequestLock );
 //#endif	
-			me->fPort->lineState = buf[status_idx];
+			me->fPort->lineState = buf[status_idx];		
+
 			if (buf[status_idx] & kCTS) stat |= PD_RS232_S_CTS;
 			if (buf[status_idx] & kDSR) stat |= PD_RS232_S_DSR;
 			if (buf[status_idx] & kRI)  stat |= PD_RS232_S_RI;
-			if (buf[status_idx] & kDCD) stat |= PD_RS232_S_CAR;
-			DATA_IOLog(1,"nl_bjaelectronics_driver_PL2303: HANDSHAKE State: %p mask: %p ",stat, kHandshakeInMask);
-			
-            me->setStateGated( stat, kHandshakeInMask , port); //kHandshakeInMask
+			if (buf[status_idx] & kDCD) stat |= PD_RS232_S_CAR;		
+            me->setStateGated( stat, kHandshakeInMask , port); // refresh linestate in State
 
 		}
 		
