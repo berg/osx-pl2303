@@ -2302,13 +2302,26 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 			
 		case PD_RS232_E_LINE_BREAK:
 			DEBUG_IOLog(4,"%s(%p)::executeEvent - PD_RS232_E_LINE_BREAK\n", getName(), this );
-			state &= ~PD_RS232_S_BRK;
-			delta |= PD_RS232_S_BRK;
+            state &= ~PD_RS232_S_BRK;
+            delta |= PD_RS232_S_BRK;
+            if (data)
+            {
+                port->BreakState = true;
+            } else {
+                port->BreakState = false;
+            }
+            setBreak(port, data);
+            setStateGated(state, delta, port); 
 			break;
 			
 		case PD_E_DELAY:
 			DEBUG_IOLog(4,"%s(%p)::executeEvent - PD_E_DELAY\n", getName(), this );
-			port->CharLatInterval = long2tval(data * 1000);
+            if (port->BreakState)					// It's the break delay in micro seconds
+            {
+                IOSleep(data/1000);
+            } else {
+                port->CharLatInterval = long2tval(data * 1000);
+            }
 			break;
 			
 		case PD_E_RXQ_SIZE:
@@ -2544,6 +2557,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::requestEventGated( UInt32 event, UInt3
 			case PD_RS232_E_LINE_BREAK:
 				DEBUG_IOLog(4,"%s(%p)::requestEvent - PD_RS232_E_LINE_BREAK\n", getName(), this);
 				*data = bool(readPortState( port ) & PD_RS232_S_BRK);
+
 				break;
 				
 			case PD_RS232_E_MIN_LATENCY:
@@ -4073,4 +4087,39 @@ UInt32 nl_bjaelectronics_driver_PL2303::generateRxQState( PortInfo_t *port )
     return state;
 }
 
+/****************************************************************************************************/
+//
+//		Function:	SccSetBreak
+//
+//		Inputs:		Channel - The port
+//				break - true(send break), false(clear break)
+//
+//		Outputs:	
+//
+//		Desc:		Set and clear line break.
+//
+/****************************************************************************************************/
 
+IOReturn nl_bjaelectronics_driver_PL2303::setBreak( PortInfo_t *port,  bool data){
+	UInt16 value;
+	IOReturn rtn;
+	IOUSBDevRequest request;
+	
+
+	DEBUG_IOLog(4,"%s(%p)::setBreak - data: %p \n", getName(), this,  data);
+
+	if (data == 0)
+		value = BREAK_OFF;
+	else
+		value = BREAK_ON;
+
+	request.bmRequestType = USBmakebmRequestType(kUSBOut, kUSBClass, kUSBInterface);
+    request.bRequest = BREAK_REQUEST;
+	request.wValue =  value; 
+	request.wIndex = 0;
+	request.wLength = 0;
+	request.pData = NULL;
+	rtn =  fpDevice->DeviceRequest(&request);
+	DEBUG_IOLog(4,"%s(%p)::setBreak - return: %p \n", getName(), this,  rtn);
+	return rtn;
+}

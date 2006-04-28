@@ -433,5 +433,5 @@ private:
     /**** FlowControl ****/
 	IOReturn        setControlLines( PortInfo_t *port );
     UInt32			generateRxQState( PortInfo_t *port );
-
+	IOReturn		setBreak( PortInfo_t *port,  bool data);
 };
