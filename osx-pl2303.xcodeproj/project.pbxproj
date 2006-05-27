@@ -11,7 +11,6 @@
 		32D94FC80562CBF700B6AF17 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 089C167DFE841241C02AAC07 /* InfoPlist.strings */; };
 		32D94FCA0562CBF700B6AF17 /* osx_pl2303.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1A224C3FFF42367911CA2CB7 /* osx_pl2303.cpp */; settings = {ATTRIBUTES = (); }; };
 		906D8A5809AF0FBC00CAB1B1 /* COPYING in Resources */ = {isa = PBXBuildFile; fileRef = 906D8A5709AF0FBC00CAB1B1 /* COPYING */; };
-		9086EC3509DB19DF00297DF4 /* load.sh in Resources */ = {isa = PBXBuildFile; fileRef = 9086EC3409DB19DF00297DF4 /* load.sh */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXBuildStyle section */
@@ -37,7 +36,6 @@
 		32D94FD00562CBF700B6AF17 /* osx-pl2303.kext */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "osx-pl2303.kext"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8DA8362C06AD9B9200E5AC22 /* Kernel.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Kernel.framework; path = /System/Library/Frameworks/Kernel.framework; sourceTree = "<absolute>"; };
 		906D8A5709AF0FBC00CAB1B1 /* COPYING */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = text; path = COPYING; sourceTree = "<group>"; };
-		9086EC3409DB19DF00297DF4 /* load.sh */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = text.script.sh; path = load.sh; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,7 +91,6 @@
 		9086EC3309DB19BE00297DF4 /* external */ = {
 			isa = PBXGroup;
 			children = (
-				9086EC3409DB19DF00297DF4 /* load.sh */,
 			);
 			name = external;
 			sourceTree = "<group>";
@@ -162,7 +159,6 @@
 			files = (
 				32D94FC80562CBF700B6AF17 /* InfoPlist.strings in Resources */,
 				906D8A5809AF0FBC00CAB1B1 /* COPYING in Resources */,
-				9086EC3509DB19DF00297DF4 /* load.sh in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
