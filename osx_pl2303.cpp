@@ -618,7 +618,7 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	IOUSBDevRequest request;
 	char * buf;	
 	IOReturn rtn;
-	DEBUG_IOLog(4,"%s(%p)::startSerial \n", getName(), this);
+	DEBUG_IOLog(1,"%s(%p)::startSerial \n", getName(), this);
 	
 	
 	
@@ -712,7 +712,20 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	rtn =  fpDevice->DeviceRequest(&request);
 	DEBUG_IOLog(1,"%s(%p)::setSerialConfiguration - return VENDOR_WRITE_REQUEST: %p \n", getName(), this,  rtn);
 */
-			
+/*	if (cflag & CRTSCTS) {
+		__u16 index;
+		if (priv->type == HX)
+			index = 0x61;
+		else
+			index = 0x41;
+		i = usb_control_msg(serial->dev, 
+				    usb_sndctrlpipe(serial->dev, 0),
+				    VENDOR_WRITE_REQUEST,
+				    VENDOR_WRITE_REQUEST_TYPE,
+				    0x0, index, NULL, 0, 100);
+		dbg ("0x40:0x1:0x0:0x%x  %d", index, i);
+	}			
+*/			
 	// open the pipe endpoints
 	if (!allocateResources() ) {
 		IOLog("%s(%p)::start Allocate resources failed\n", getName(), this);
@@ -739,7 +752,6 @@ Fail:
 
 void nl_bjaelectronics_driver_PL2303::stopSerial( bool resetDevice )
 {
-	int i = 0;
 
 	DEBUG_IOLog(1,"%s(%p)::stopSerial\n", getName(), this);
     stopPipes();                            // stop reading on the usb pipes
@@ -750,28 +762,7 @@ void nl_bjaelectronics_driver_PL2303::stopSerial( bool resetDevice )
     }
 
 	
-/*
-	IOLog("BJA StopSerial resetDevice: %p fpDevice%p\n",resetDevice,fpDevice);
-	if ((resetDevice) && (fpDevice)) {
-	
-	    IOLog("BJA StopSerial RESET DEVICE\n");
-		IOLog("%s(%p)::stopSerial RESET DEVICE \n", getName(), this);IOSleep(10);
-		fUSBStarted = false; 
-		IOLog("%s(%p)::stopSerial close device-1\n", getName(), this);	IOSleep(10);
-		if(resetDevice) { fpDevice->close( fpDevice ); }
-		IOLog("%s(%p)::stopSerial reset device-1 \n", getName(), this);	IOSleep(10);
-		if(resetDevice) { fpDevice->ResetDevice(); }
-		i = 0;
-		while (!fUSBStarted & (i < 10)) {	IOSleep(10); i++; }
-		fUSBStarted = false;  
-		IOLog("%s(%p)::stopSerial close device-2 timout: %d \n", getName(), this, i);	IOSleep(10);
-		if(resetDevice) { fpDevice->close( fpDevice ); }
-		IOLog("%s(%p)::stopSerial reset device-2 \n", getName(), this);	IOSleep(10);
-		if(resetDevice) { fpDevice->ResetDevice(); } 
-	} */
-	
-	//Make our PL2303 clean. We don't know the right USB request due the lack of documentation :(
-//	fUSBStarted = false;  	
+
 	DEBUG_IOLog(1,"%s(%p)::stopSerial stopSerial succeed\n", getName(), this);
     
 Fail:
@@ -2119,13 +2110,59 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 			
 			old = port->FlowControl;				    // save old modes for unblock checks
             port->FlowControl = data & (CAN_BE_AUTO | CAN_NOTIFY);  // new values, trimmed to legal values
-			DEBUG_IOLog(4,"%s(%p)::executeEvent - PD_E_FLOW_CONTROL port->FlowControl %p\n", getName(), this, port->FlowControl );
-			
+			DEBUG_IOLog(1,"%s(%p)::executeEvent - PD_E_FLOW_CONTROL port->FlowControl %p\n", getName(), this, port->FlowControl );
+		
 			// now cleanup if we've blocked RX or TX with the previous style flow control and we're switching to a different kind
 			// we have 5 different flow control modes to check and unblock; 3 on rx, 2 on tx
+
+			
+			if ( !(old & PD_RS232_S_CTS) && (PD_RS232_S_CTS & port->FlowControl) )
+				{
+				DEBUG_IOLog(1,"%s(%p)::executeEvent - Automatic CTS flowcontrol On\n", getName(), this);
+					IOUSBDevRequest request;
+
+					if (fPort->type == HX ) {
+						request.wIndex = 0x61;
+					} else {
+						request.wIndex = 0x41;
+						 
+					}
+					request.bmRequestType = VENDOR_WRITE_REQUEST_TYPE; 
+					request.bRequest = VENDOR_WRITE_REQUEST;
+					request.wValue =  0; 
+					request.wLength = 0;
+					request.pData = NULL;
+					int rtn = fpDevice->DeviceRequest(&request);
+					DEBUG_IOLog(1,"%s(%p)::executeEvent - executeEvent - device request: %p \n", getName(), this,  rtn);
+				
+					port->FlowControlState = CONTINUE_SEND; 
+				}
+				
+			if ( (old & PD_RS232_S_CTS) && !(PD_RS232_S_CTS & port->FlowControl) )
+				{
+					DEBUG_IOLog(1,"%s(%p)::executeEvent - Automatic CTS flowcontrol Off\n", getName(), this);
+					IOUSBDevRequest request;
+
+					request.wIndex = 0x00;
+					request.bmRequestType = VENDOR_WRITE_REQUEST_TYPE; 
+					request.bRequest = VENDOR_WRITE_REQUEST;
+					request.wValue =  0; 
+					request.wLength = 0;
+					request.pData = NULL;
+					int rtn = fpDevice->DeviceRequest(&request);
+					DEBUG_IOLog(1,"%s(%p)::executeEvent - device request: %p \n", getName(), this,  rtn);
+				
+					port->FlowControlState = CONTINUE_SEND; 
+				}
+				
 			if (!fTerminate && old && (old ^ port->FlowControl))		// if had some modes, and some modes are different
 			{
+					DEBUG_IOLog(1,"%s(%p)::executeEvent - We zijn in de IF  %p \n", getName(), this , PD_RS232_S_CTS);
+			
+			
+			
 				#define SwitchingAwayFrom(flag) ((old & flag) && !(port->FlowControl & flag))
+				#define SwitchingTo(flag) (!(old & flag) && (port->FlowControl & flag))
 				
 				// if switching away from rx xon/xoff and we've sent an xoff, unblock
 				if (SwitchingAwayFrom(PD_RS232_A_RXO) && port->xOffSent)
@@ -2149,24 +2186,16 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 				{
 					DEBUG_IOLog(1,"%s(%p)::executeEvent - PD_E_FLOW_CONTROL set DTR\n", getName(), this, port->FlowControl );
 					port->DTRAsserted = true;			
-	//				IOLog("WOW DTR AAN\n");
-
 					port->State |= PD_RS232_S_DTR;		    // raise DTR again
 				}
 								
-				// If switching away from CTS and we've paused tx, continue it
-				if (SwitchingAwayFrom(PD_RS232_S_CTS) && port->FlowControlState != CONTINUE_SEND)
-				{
-					port->FlowControlState = CONTINUE_SEND;
-//					IODBDMAContinue(fPort.TxDBDMAChannel.dmaBase);		// Continue transfer
-				}
+
 				
 				// If switching away from TX xon/xoff and we've paused tx, continue it
 				if (SwitchingAwayFrom(PD_RS232_S_TXO) && port->RXOstate == kXOnNeeded)
 				{
 					port->RXOstate = kXOffNeeded;
 					port->FlowControlState = CONTINUE_SEND;
-//					IODBDMAContinue(fPort.TxDBDMAChannel.dmaBase);		// Continue transfer
 				} 
 				changeState( port, (UInt32)PD_S_ACTIVE, (UInt32)PD_S_ACTIVE ); 
 

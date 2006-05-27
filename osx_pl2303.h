@@ -422,8 +422,8 @@ private:
     bool            createSerialStream();                       // create bsd stream
     void            destroySerialStream();                      // delete bsd stream
     bool            createSuffix( unsigned char *sufKey );
-    bool            startSerial();                                // start irda up
-    void            stopSerial();                                 // shut down irda
+    bool            startSerial();                               // start serial up
+    void            stopSerial( bool resetDevice );             // shut down serial
     bool            createNub();                                // create nub (and port)
     void            destroyNub();
     void            SetStructureDefaults( PortInfo_t *port, bool Init );
