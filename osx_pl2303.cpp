@@ -26,31 +26,16 @@
  * - AppleUSBIrda Copyright (c) 2000 Apple Computer, Inc. All rights reserved.
  *
  *
- * WARNING
- * - zorg ervoor dat de omgeving zo snel mogelijk de status lijnen ophaalt
- * wanneer een tty wordt geopend zal het os wachten totdat DCD hoog is. Bij cu is dit niet het geval
- *
  *
  * Tests:
  * - Driver only tested with ATEN UC-RS232A, but should support other PL2303 based USB to RS232 converters
+ * - Handshake signals
  *
  * Todo:
  * - Implementation Powermanagement
- * - Implementation Flow-Control/Handshake
  * - Fix USBF: Could not open device: Strange error message
- * - Some small bugs
  *
  *
- *
- * The Linux Driver contains the following code in open():
- * 	if (priv->type != HX) {
- *		usb_clear_halt(serial->dev, port->write_urb->pipe);
- *		usb_clear_halt(serial->dev, port->read_urb->pipe);
- *	}
- *
- * This driver does not implement this clear_halt: The driver initialise the pipes when
- * the device is opened from a client. I assume that the pipe is clean and contains
- * no halt. I did not have the HX chip. I could not test this case.
  *
  * http://www.usb.org/developers/devclass_docs/usbcdc11.pdf
  */
@@ -72,14 +57,14 @@ extern "C" {
 #include <pexpert/pexpert.h>
 }
 
-#define DEBUG
+//#define DEBUG
 #ifdef DEBUG
 #define DEBUG_IOLog(args...) USBLog (args)
 #else
 #define DEBUG_IOLog(args...)
 #endif
 
-#define DATALOG
+//#define DATALOG
 
 #ifdef DATALOG
 #define DATA_IOLog(args...)	USBLog (args)
@@ -693,39 +678,7 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	}
 	
     IOFree(buf, 10);
-//	request.bmRequestType = USBmakebmRequestType(kUSBOut, kUSBClass, kUSBInterface);
-//    request.bRequest = SET_LINE_REQUEST;
-//	request.wValue =  0; 
-//	request.wIndex = 0;
-//	request.wLength = 7;
-//	request.pData = buf;
-//	rtn =  fpDevice->DeviceRequest(&request);
-//	DEBUG_IOLog(4,"%s(%p)::startSerial - chip clean return: %p \n", getName(), this,  rtn);
 	
-// VIND DIT TERUG!!!	
-/*	request.bmRequestType = VENDOR_WRITE_REQUEST_TYPE; // USBmakebmRequestType(kUSBOut, kUSBClass, kUSBInterface);
-    request.bRequest = VENDOR_WRITE_REQUEST;
-	request.wValue =  0; 
-	request.wIndex = 0x61;
-	request.wLength = 0;
-	request.pData = NULL;
-	rtn =  fpDevice->DeviceRequest(&request);
-	DEBUG_IOLog(1,"%s(%p)::setSerialConfiguration - return VENDOR_WRITE_REQUEST: %p \n", getName(), this,  rtn);
-*/
-/*	if (cflag & CRTSCTS) {
-		__u16 index;
-		if (priv->type == HX)
-			index = 0x61;
-		else
-			index = 0x41;
-		i = usb_control_msg(serial->dev, 
-				    usb_sndctrlpipe(serial->dev, 0),
-				    VENDOR_WRITE_REQUEST,
-				    VENDOR_WRITE_REQUEST_TYPE,
-				    0x0, index, NULL, 0, 100);
-		dbg ("0x40:0x1:0x0:0x%x  %d", index, i);
-	}			
-*/			
 	// open the pipe endpoints
 	if (!allocateResources() ) {
 		IOLog("%s(%p)::start Allocate resources failed\n", getName(), this);
@@ -734,16 +687,7 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	
     
     startPipes();                           // start reading on the usb pipes
-/*	
-	request.bmRequestType = VENDOR_WRITE_REQUEST_TYPE; // USBmakebmRequestType(kUSBOut, kUSBClass, kUSBInterface);
-    request.bRequest = VENDOR_WRITE_REQUEST;
-	request.wValue =  0; 
-	request.wIndex = 0x61;
-	request.wLength = 0;
-	request.pData = NULL;
-	rtn =  fpDevice->DeviceRequest(&request);
-	DEBUG_IOLog(1,"%s(%p)::setSerialConfiguration - return VENDOR_WRITE_REQUEST: %p \n", getName(), this,  rtn);
-*/
+
     return true;
 	
 Fail:
@@ -1442,15 +1386,7 @@ IOReturn err = kIOReturnSuccess;
 						
 		case kIOUSBMessagePortHasBeenReset:
 			DEBUG_IOLog(1,"%s(%p)::message - kIOUSBMessagePortHasBeenReset\n", getName(), this);
-//			if ( fpDevice && !fpDevice->isOpen(fpDevice) )
-//				{
-//				if ( !fpDevice->open(this) )
-//					{
-//					DEBUG_IOLog(1, "%s[%p]::message.  Can't open it, giving up",getName(), this);
-//					err = kIOReturnExclusiveAccess;
-//					goto Fail;
-//					}
-//				}
+
 				
 			if (fpDevice->GetNumConfigurations() < 1)
 				{
@@ -1573,7 +1509,6 @@ void nl_bjaelectronics_driver_PL2303::changeState( PortInfo_t *port, UInt32 stat
 					port->State |= PD_RS232_S_DTR;
 					setControlLines( port );	
 
-	//				IOLog("WOW DTR AAN changestate\n");
                 } else {
 					port->State &= ~PD_RS232_S_DTR;
 					setControlLines( port );	
@@ -1780,7 +1715,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::releasePortGated( void *refCon )
     changeState( port, 0, (UInt32)STATE_ALL );  // Clear the entire state word which also deactivates the port
 	
     fSessions--;        // reduce number of active sessions
-    CheckSerialState();   // turn irda off if appropriate
+    CheckSerialState();   // turn serial off if appropriate
 	
     if ((fTerminate) && (fSessions == 0))       // if it's the result of a terminate and session count is zero we also need to close things
 	{
@@ -2076,7 +2011,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
     PortInfo_t  *port = (PortInfo_t *) refCon;
     IOReturn    ret = kIOReturnSuccess;
     UInt32      state, delta, old;
- 
+    int rtn;
 	DEBUG_IOLog(4,"%s(%p)::executeEventGated\n", getName(), this);
 	   
     delta = 0;
@@ -2089,11 +2024,9 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
     switch ( event )
 	{
 		case PD_RS232_E_XON_BYTE:
-//			IOLog("%s(%p)::executeEvent - PD_RS232_E_XON_BYTE\n", getName(), this );
 			port->XONchar = data;
 			break;
 		case PD_RS232_E_XOFF_BYTE:
-//			IOLog("%s(%p)::executeEvent - PD_RS232_E_XOFF_BYTE\n", getName(), this );
 			port->XOFFchar = data;
 			break;
 		case PD_E_SPECIAL_BYTE:
@@ -2132,7 +2065,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 					request.wValue =  0; 
 					request.wLength = 0;
 					request.pData = NULL;
-					int rtn = fpDevice->DeviceRequest(&request);
+					rtn = fpDevice->DeviceRequest(&request);
 					DEBUG_IOLog(1,"%s(%p)::executeEvent - executeEvent - device request: %p \n", getName(), this,  rtn);
 				
 					port->FlowControlState = CONTINUE_SEND; 
@@ -2149,7 +2082,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 					request.wValue =  0; 
 					request.wLength = 0;
 					request.pData = NULL;
-					int rtn = fpDevice->DeviceRequest(&request);
+					rtn = fpDevice->DeviceRequest(&request);
 					DEBUG_IOLog(1,"%s(%p)::executeEvent - device request: %p \n", getName(), this,  rtn);
 				
 					port->FlowControlState = CONTINUE_SEND; 
@@ -2598,12 +2531,12 @@ IOReturn nl_bjaelectronics_driver_PL2303::requestEventGated( UInt32 event, UInt3
 				break;
 				
 			case PD_RS232_E_XON_BYTE:
-				IOLog("%s(%p)::requestEvent - PD_RS232_E_XON_BYTE\n", getName(), this);
+				DEBUG_IOLog(4,"%s(%p)::requestEvent - PD_RS232_E_XON_BYTE\n", getName(), this);
 				*data = port->XONchar;          
 				break;
 				
 			case PD_RS232_E_XOFF_BYTE:
-				IOLog("%s(%p)::requestEvent - PD_RS232_E_XOFF_BYTE\n", getName(), this);
+				DEBUG_IOLog(4,"%s(%p)::requestEvent - PD_RS232_E_XOFF_BYTE\n", getName(), this);
 				*data = port->XOFFchar;         
 				break;
 				
@@ -3012,9 +2945,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::startTransmit(UInt32 control_length, U
 	UInt32 buflen;
 	buflen = fCount;
 	buf = &fPipeOutBuffer[0];
-//	DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::startTransmit IOLockLock( port->serialRequestLock );\n" );
 	
-//	IOLockLock( fPort->serialRequestLock );
 	DATA_IOLog(3,"nl_bjaelectronics_driver_PL2303: Send: ");
 	while ( buflen ){
 		unsigned char c = *buf;
@@ -3023,9 +2954,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::startTransmit(UInt32 control_length, U
 		buflen--;
 	}
 	DATA_IOLog(3,"\n");	
-//	DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::startTransmit IOLockUnLock( port->serialRequestLock );\n" );
 
-//	IOLockUnlock( fPort->serialRequestLock );
 
 #endif	
     ior = fpOutPipe->Write( fpPipeOutMDP, 1000, 1000, &fWriteCompletionInfo );  // 1 second timeouts
@@ -3118,21 +3047,17 @@ void nl_bjaelectronics_driver_PL2303::interruptReadComplete( void *obj, void *pa
 			DEBUG_IOLog(1,"nl_bjaelectronics_driver_PL2303::interruptReadComplete wrong buffersize");
 		} else {
 
-//#ifdef DATALOG
-//			DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::interruptReadComplete IOLockLock( port->serialRequestLock );\n" );
 
-//			IOLockLock( me->fPort->serialRequestLock );
 			UInt8 *buf;
 			UInt32 buflen;
 			buflen = dLen;
 			buf = &me->fpinterruptPipeBuffer[0];
+#ifdef DATALOG
+
 			DATA_IOLog(1,"nl_bjaelectronics_driver_PL2303: Interrupt: ");
 			unsigned char c = buf[status_idx];
 		    DATA_IOLog(1,"[%02x] ",c);	
-//			DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::interruptReadComplete IOLockUnLock( port->serialRequestLock );\n" );
-
-//			IOLockUnlock( me->fPort->serialRequestLock );
-//#endif	
+#endif	
 			me->fPort->lineState = buf[status_idx];		
 
 			if (buf[status_idx] & kCTS) stat |= PD_RS232_S_CTS;
@@ -3181,9 +3106,7 @@ void nl_bjaelectronics_driver_PL2303::dataReadComplete( void *obj, void *param, 
 		if ( dtlength > 0 )
 		{
 #ifdef DATALOG
-//			DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::dataReadComplete IOLockLock( port->serialRequestLock );\n" );
 
-//			IOLockLock( me->fPort->serialRequestLock );
 			UInt8 *buf;
 			UInt32 buflen;
 			buflen = dtlength;
@@ -3196,9 +3119,6 @@ void nl_bjaelectronics_driver_PL2303::dataReadComplete( void *obj, void *param, 
 				buflen--;
 			}
 			DATA_IOLog(3,"\n");	
-//			DEBUG_IOLog(2,"nl_bjaelectronics_driver_PL2303::dataReadComplete IOLockUnLock( port->serialRequestLock );\n" );
-
-//			IOLockUnlock( me->fPort->serialRequestLock );
 #endif	
 			ior = me->addtoQueue( &me->fPort->RX, &me->fPipeInBuffer[0], dtlength );
 		}
@@ -3225,40 +3145,6 @@ void nl_bjaelectronics_driver_PL2303::dataReadComplete( void *obj, void *param, 
     return;
     
 }/* end dataReadComplete */
-/*
-	tty_flag = TTY_NORMAL;
-
-	spin_lock_irqsave(&priv->lock, flags);
-	status = priv->line_status;
-	priv->line_status &= ~UART_STATE_TRANSIENT_MASK;
-	spin_unlock_irqrestore(&priv->lock, flags);
-	wake_up_interruptible (&priv->delta_msr_wait);
-*/
-	/* break takes precedence over parity, */
-	/* which takes precedence over framing errors */
-/*	if (status & UART_BREAK_ERROR )
-		tty_flag = TTY_BREAK;
-	else if (status & UART_PARITY_ERROR)
-		tty_flag = TTY_PARITY;
-	else if (status & UART_FRAME_ERROR)
-		tty_flag = TTY_FRAME;
-	dbg("%s - tty_flag = %d", __FUNCTION__, tty_flag);
-
-	tty = port->tty;
-	if (tty && urb->actual_length) {
-		/* overrun is special, not associated with a char */
-/*		if (status & UART_OVERRUN_ERROR)
-			tty_insert_flip_char(tty, 0, TTY_OVERRUN);
-
-		for (i = 0; i < urb->actual_length; ++i) {
-			if (tty->flip.count >= TTY_FLIPBUF_SIZE) {
-				tty_flip_buffer_push(tty);
-			}
-			tty_insert_flip_char (tty, data[i], tty_flag);
-		}
-		tty_flip_buffer_push (tty);
-	}
-*/
 
 /****************************************************************************************************/
 //
@@ -3916,7 +3802,6 @@ void nl_bjaelectronics_driver_PL2303::checkQueues( PortInfo_t *port )
 		if (DTR_FlowControl && !port->DTRAsserted)	    // unblock DTR flow control
 			{
 				port->DTRAsserted = true;
-	//			IOLog("WOW DTR AAN\n");
 
 				port->State |= PD_RS232_S_DTR;
 			}	
@@ -4025,11 +3910,6 @@ bool nl_bjaelectronics_driver_PL2303::setUpTransmit( void )
 		fPort->AreTransmitting = false;
 		
 		IOFree( TempOutBuffer, data_Length );
-		//if ( tCount != count )
-		//	{
-		//	    ELG( tCount, count, 'IrW-', "SetUpTransmit - IrDA write problem, data has been dropped" );
-		//	    return false;
-		//	}
 		
 		// We potentially removed a bunch of stuff from the
 		// queue, so see if we can free some thread(s)
@@ -4114,7 +3994,6 @@ UInt32 nl_bjaelectronics_driver_PL2303::generateRxQState( PortInfo_t *port )
                 }                    
             } else if ( port->FlowControl & PD_RS232_A_DTR) {
                 state |= PD_RS232_S_DTR;
-//							IOLog("WOW DTR AAN\n");
 
             }
             break;
@@ -4142,7 +4021,7 @@ UInt32 nl_bjaelectronics_driver_PL2303::generateRxQState( PortInfo_t *port )
 
 /****************************************************************************************************/
 //
-//		Function:	SccSetBreak
+//		Function:	SetBreak
 //
 //		Inputs:		Channel - The port
 //				break - true(send break), false(clear break)
