@@ -145,7 +145,6 @@ IOService *nl_bjaelectronics_driver_PL2303::probe(IOService *provider, SInt32 *s
 bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
 {
     enum pl2303_type type = type_0;
-    IOReturn rtn = kIOReturnSuccess;
 
     fTerminate = false;     // Make sure we don't think we're being terminated
     fPort = NULL;
@@ -621,6 +620,23 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	IOReturn rtn;
 	DEBUG_IOLog(4,"%s(%p)::startSerial \n", getName(), this);
 	
+	
+	
+	/* Ugly hack to make device clean */
+	DEBUG_IOLog(5,"%s(%p)::startSerial RESET DEVICE \n", getName(), this);
+	fUSBStarted = false; 
+	DEBUG_IOLog(5,"%s(%p)::startSerial close device-1\n", getName(), this);	
+	if(fpDevice) { fpDevice->close( fpDevice ); }
+	DEBUG_IOLog(5,"%s(%p)::startSerial reset device-1 \n", getName(), this);
+	if(fpDevice) { fpDevice->ResetDevice(); }
+	int i = 0;
+	while (!fUSBStarted & (i < 10)) {	IOSleep(10); i++; }
+	DEBUG_IOLog(5,"%s(%p)::startSerial close device-2 timout: %d \n", getName(), this, i);
+	if(fpDevice) { fpDevice->close( fpDevice ); }
+	DEBUG_IOLog(5,"%s(%p)::startSerial reset device-2 \n", getName(), this);
+	if(fpDevice) { fpDevice->ResetDevice(); } 
+	/*    ****************************     */
+		
 	buf = (char *) IOMalloc(10);
     if (!buf) {
 		IOLog("%s(%p)::startSerial could not alloc memory for buf\n", getName(), this);
@@ -721,34 +737,42 @@ Fail:
 		return false;
 }
 
-void nl_bjaelectronics_driver_PL2303::stopSerial()
+void nl_bjaelectronics_driver_PL2303::stopSerial( bool resetDevice )
 {
 	int i = 0;
 
-	DEBUG_IOLog(4,"%s(%p)::stopSerial\n", getName(), this);
+	DEBUG_IOLog(1,"%s(%p)::stopSerial\n", getName(), this);
     stopPipes();                            // stop reading on the usb pipes
 
     if (fpPipeOutMDP != NULL)               // better test for releaseResources?
     {
 		releaseResources( );
     }
-	//Make our PL2303 clean. We don't know the right USB request due the lack of documentation :(
-	fUSBStarted = false;  
-	
-	DEBUG_IOLog(5,"%s(%p)::stopSerial close device-1\n", getName(), this);	
-	fpDevice->close( fpDevice );
-	DEBUG_IOLog(5,"%s(%p)::stopSerial reset device-1 \n", getName(), this);	
 
-	fpDevice->ResetDevice();
-	i = 0;
-	while (!fUSBStarted & (i < 10)) {	IOSleep(10); i++; }
-	fUSBStarted = false;  
-	DEBUG_IOLog(5,"%s(%p)::stopSerial close device-2 timout: %d \n", getName(), this, i);	
-	fpDevice->close( fpDevice );
-	DEBUG_IOLog(5,"%s(%p)::stopSerial reset device-2 \n", getName(), this);	
-	fpDevice->ResetDevice();
 	
-	DEBUG_IOLog(5,"%s(%p)::stopSerial stopSerial succeed\n", getName(), this);
+/*
+	IOLog("BJA StopSerial resetDevice: %p fpDevice%p\n",resetDevice,fpDevice);
+	if ((resetDevice) && (fpDevice)) {
+	
+	    IOLog("BJA StopSerial RESET DEVICE\n");
+		IOLog("%s(%p)::stopSerial RESET DEVICE \n", getName(), this);IOSleep(10);
+		fUSBStarted = false; 
+		IOLog("%s(%p)::stopSerial close device-1\n", getName(), this);	IOSleep(10);
+		if(resetDevice) { fpDevice->close( fpDevice ); }
+		IOLog("%s(%p)::stopSerial reset device-1 \n", getName(), this);	IOSleep(10);
+		if(resetDevice) { fpDevice->ResetDevice(); }
+		i = 0;
+		while (!fUSBStarted & (i < 10)) {	IOSleep(10); i++; }
+		fUSBStarted = false;  
+		IOLog("%s(%p)::stopSerial close device-2 timout: %d \n", getName(), this, i);	IOSleep(10);
+		if(resetDevice) { fpDevice->close( fpDevice ); }
+		IOLog("%s(%p)::stopSerial reset device-2 \n", getName(), this);	IOSleep(10);
+		if(resetDevice) { fpDevice->ResetDevice(); } 
+	} */
+	
+	//Make our PL2303 clean. We don't know the right USB request due the lack of documentation :(
+//	fUSBStarted = false;  	
+	DEBUG_IOLog(1,"%s(%p)::stopSerial stopSerial succeed\n", getName(), this);
     
 Fail:
 		return;
@@ -788,7 +812,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::CheckSerialState( void )
     {
 		DEBUG_IOLog(5,"%s(%p)::CheckSerialState - StopSerial\n", getName(), this);
 		fTerminate = true;              // Make it look like we've been terminated	    
-		stopSerial();                     // stop irda and stop pipe i/o
+		stopSerial(true);                     // stop irda and stop pipe i/o
 		DEBUG_IOLog(5,"%s(%p)::CheckSerialState - StopSerial successful\n", getName(), this);
 
     }
@@ -1318,7 +1342,7 @@ IOReturn err = kIOReturnSuccess;
 			DEBUG_IOLog(4,"%s(%p)::message - kIOMessageServiceIsTerminated sessions: %p\n", getName(), this,fSessions);
 			
 			if ( fSessions ){
-				stopSerial();         // stop serial now
+				stopSerial( false );         // stop serial now
 
 				DEBUG_IOLog(4,"%s(%p)::message - kIOMessageServiceIsTerminated fSessions\n", getName(), this);
 
@@ -1338,7 +1362,7 @@ IOReturn err = kIOReturnSuccess;
 												  "The USB Serial Pod has been unplugged while an Application was still active. This can result in loss of data.",
 												  "OK");
 			} else {
-				stopSerial();         // stop serial now
+				stopSerial( false);         // stop serial now
 			
 				if ( fpInterface ) {
 					fpInterface->close( this ); 
