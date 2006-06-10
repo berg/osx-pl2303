@@ -2571,22 +2571,62 @@ IOReturn nl_bjaelectronics_driver_PL2303::requestEventGated( UInt32 event, UInt3
 //
 //      Outputs:    Return Code - kIOReturnSuccess, kIOReturnNotOpen
 //
-//      Desc:       Not used by this driver.    
+//      Desc:       Only used for set/reset break    
 //
 /****************************************************************************************************/
 
 IOReturn nl_bjaelectronics_driver_PL2303::enqueueEvent( UInt32 event, UInt32 data, bool sleep, void *refCon)
 {
-	DEBUG_IOLog(4,"%s(%p)::enqueueEvent\n", getName(), this);
- 
-	PortInfo_t *port = (PortInfo_t *) refCon;
+	DEBUG_IOLog(2,"%s(%p)::enqueueEvent event: %p \n", getName(), this, data);
+	PortInfo_t  *port = (PortInfo_t *) refCon;
+    IOReturn    ret = kIOReturnSuccess;
+    UInt32      state, delta;
     	
-    if ( readPortState( port ) & PD_S_ACTIVE )
-	{
-		return kIOReturnSuccess;
+    delta = 0;
+    state = readPortState( port );  
+
+    
+    if ( (state & PD_S_ACQUIRED) == 0 ){
+		return kIOReturnNotOpen;
 	}
 	
-    return kIOReturnNotOpen;
+    switch ( event )
+	{	
+		case PD_RS232_E_LINE_BREAK:
+			DEBUG_IOLog(2,"%s(%p)::enqueueEvent - PD_RS232_E_LINE_BREAK\n", getName(), this );
+            state &= ~PD_RS232_S_BRK;
+            delta |= PD_RS232_S_BRK;
+            if (data)
+            {
+                port->BreakState = true;
+            } else {
+                port->BreakState = false;
+            }
+            setBreak(port, data);
+            setStateGated(state, delta, port); 
+			break;
+		case PD_E_DELAY:
+			DEBUG_IOLog(2,"%s(%p)::enqueueEvent - PD_E_DELAY time: %d \n", getName(), this, data );
+            if (port->BreakState)					// It's the break delay in micro seconds
+            {
+                IOSleep(data/1000);
+            } else {
+                port->CharLatInterval = long2tval(data * 1000);
+            }
+			break;	
+		default:
+			DEBUG_IOLog(2,"%s(%p)::enqueueEvent - unrecognized event \n", getName(), this );
+			ret = kIOReturnBadArgument;
+			break;
+	}
+	
+    state |= state;/* ejk for compiler warnings. ?? */
+	changeState( port, state, delta );
+		
+	return ret;			
+    
+	return kIOReturnSuccess;
+
     
 }/* end enqueueEvent */
 
