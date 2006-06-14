@@ -3902,7 +3902,7 @@ void nl_bjaelectronics_driver_PL2303::checkQueues( PortInfo_t *port )
 bool nl_bjaelectronics_driver_PL2303::setUpTransmit( void )
 {	
     size_t      count = 0;
-    size_t      data_Length;
+    size_t      data_Length = 0;
     UInt8       *TempOutBuffer;
 	
 	DEBUG_IOLog(4,"%s(%p)::SetUpTransmit\n", getName(), this);
@@ -3918,11 +3918,15 @@ bool nl_bjaelectronics_driver_PL2303::setUpTransmit( void )
     //if ( GetQueueStatus( &fPort->TX ) != queueEmpty )
     if (usedSpaceinQueue(&fPort->TX) > 0)
 	{
-		//	data_Length = fIrDA->TXBufferAvailable();
-		//	if ( data_Length == 0 )
-		//	{
-		//	    return false;
-		//	}
+		//data_Length = fIrDA->TXBufferAvailable();
+
+		data_Length = MAX_BLOCK_SIZE;
+		if ( data_Length == 0 )
+		{
+			DEBUG_IOLog(4,"%s(%p)::SetUpTransmit - No space in TX buffer available\n", getName(), this);
+
+			return false;
+		}
 		
 		if ( data_Length > MAX_BLOCK_SIZE )
 		{
@@ -3932,7 +3936,7 @@ bool nl_bjaelectronics_driver_PL2303::setUpTransmit( void )
 		TempOutBuffer = (UInt8*)IOMalloc( data_Length );
 		if ( !TempOutBuffer )
 		{
-			//			DEBUG_IOLog(4,"%s(%p)::SetUpTransmit - buffer allocation problem\n", getName(), this);
+			DEBUG_IOLog(4,"%s(%p)::SetUpTransmit - buffer allocation problem\n", getName(), this);
 			return false;
 		}
 		bzero( TempOutBuffer, data_Length );
