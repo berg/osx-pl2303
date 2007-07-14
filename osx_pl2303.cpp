@@ -57,7 +57,8 @@ extern "C" {
 #include <pexpert/pexpert.h>
 }
 
-//#define DEBUG
+//To enable logging remove comments from #define DEBUG
+#define DEBUG
 #ifdef DEBUG
 #define DEBUG_IOLog(args...) USBLog (args)
 #else
