@@ -38,7 +38,8 @@
 #define productNameLength   32                  // Arbitrary length
 #define propertyTag     "Product Name"
 
-#define MAX_BLOCK_SIZE      PAGE_SIZE
+#define MAX_BLOCK_SIZE			PAGE_SIZE 
+// was PAGE_SIZE, but due to errors lowered to maximum of 10 characters
 
 #define kXOnChar  '\x11'
 #define kXOffChar '\x13'

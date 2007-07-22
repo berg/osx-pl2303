@@ -57,15 +57,17 @@ extern "C" {
 #include <pexpert/pexpert.h>
 }
 
-//To enable logging remove comments from #define DEBUG
+//To enable logging remove comments from #define DEBUG and #define DATALOG
+//Use USB Prober to monitor the logs.
 #define DEBUG
+#define DATALOG
+
 #ifdef DEBUG
 #define DEBUG_IOLog(args...) USBLog (args)
 #else
 #define DEBUG_IOLog(args...)
 #endif
 
-//#define DATALOG
 
 #ifdef DATALOG
 #define DATA_IOLog(args...)	USBLog (args)
@@ -2736,8 +2738,24 @@ IOReturn nl_bjaelectronics_driver_PL2303::enqueueDataGated( UInt8 *buffer, UInt3
     UInt32      state = PD_S_TXQ_LOW_WATER;
     IOReturn    rtn = kIOReturnSuccess;
 	
-    DEBUG_IOLog(4,"%s(%p)::enqueueDataGated\n", getName(), this);
+    DEBUG_IOLog(1,"%s(%p)::enqueueDataGated (bytes: %d)\n", getName(), this,size);
+/*	
+#ifdef DEBUG
+	UInt8 *buf;
+	UInt32 buflen;
+	buflen = size;
+	buf = buffer;
 	
+
+	while ( buflen ){
+		unsigned char c = *buf;
+		DEBUG_IOLog(1,"[%02x] ",c);
+		buf++;
+		buflen--;
+	}
+
+#endif	
+*/	
     if ( fTerminate ){
 		IOLog("%s(%p)::enqueueDataGated fTerminate set\n", getName(), this);
 		
@@ -2970,7 +2988,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::startTransmit(UInt32 control_length, U
 {
     IOReturn    ior;
     
-	DEBUG_IOLog(4,"%s(%p)::StartTransmit\n", getName(), this);
+	DEBUG_IOLog(1,"%s(%p)::StartTransmit\n", getName(), this);
 	if ( data_length != 0 )
 	{
 		bcopy(data_buffer, &fPipeOutBuffer[0], data_length);		
@@ -2981,25 +2999,33 @@ IOReturn nl_bjaelectronics_driver_PL2303::startTransmit(UInt32 control_length, U
     fpPipeOutMDP->setLength( fCount );
 	
     fWriteActive = true;
+	changeState( fPort, PD_S_TX_BUSY ,PD_S_TX_BUSY );
+	
+//    UInt32      state, delta;
+//    delta = 0;
+//    state = readPortState( port );  
+//	state &= ~PD_S_TX_BUSY;
+//	delta |= PD_S_TX_BUSY;
+//	setStateGated(state, delta, port); 
+	
+	
 #ifdef DATALOG
 	UInt8 *buf;
 	UInt32 buflen;
 	buflen = fCount;
 	buf = &fPipeOutBuffer[0];
 	
-	DATA_IOLog(3,"nl_bjaelectronics_driver_PL2303: Send: ");
+	DATA_IOLog(1,"nl_bjaelectronics_driver_PL2303: Send (bytes %d): ",fCount);
 	while ( buflen ){
 		unsigned char c = *buf;
-		DATA_IOLog(3,"[%02x] ",c);
+		DATA_IOLog(1,"[%02x] ",c);
 		buf++;
 		buflen--;
 	}
-	DATA_IOLog(3,"\n");	
-
 
 #endif	
     ior = fpOutPipe->Write( fpPipeOutMDP, 1000, 1000, &fWriteCompletionInfo );  // 1 second timeouts
-    
+    DEBUG_IOLog(1,"%s(%p)::StartTransmit return value %d\n", getName(), this, ior);
     return ior;
     
 }/* end StartTransmission */
@@ -3018,31 +3044,40 @@ IOReturn nl_bjaelectronics_driver_PL2303::startTransmit(UInt32 control_length, U
 
 void nl_bjaelectronics_driver_PL2303::dataWriteComplete( void *obj, void *param, IOReturn rc, UInt32 remaining )
 {
-	DEBUG_IOLog(3,"nl_bjaelectronics_driver_PL2303::dataWriteComplete rc: %p\n", rc );
 
     nl_bjaelectronics_driver_PL2303  *me = (nl_bjaelectronics_driver_PL2303*)obj;
+	DEBUG_IOLog(1,"nl_bjaelectronics_driver_PL2303::dataWriteComplete return code c: %d, fcount: %d,  remaining: %d\n", rc, me->fCount,remaining );
+
     Boolean done = true;                // write really finished?
-	
     me->fWriteActive = false;
-    
+// BJA we zijn nu klaar dus zet TX BUSY weer uit
+    me->changeState( me->fPort, 0, PD_S_TX_BUSY );
+	me->fPort->AreTransmitting = false;
+	if (me->fTerminate)
+        return;
+	
+
+
     // in a transmit complete, but need to manually transmit a zero-length packet
     // if it's a multiple of the max usb packet size for the bulk-out pipe (64 bytes)
-    if ( rc == kIOReturnSuccess )   /* If operation returned ok:    */
-    {
+   if ( rc == kIOReturnSuccess )   /* If operation returned ok:    */
+   {
 
-		if ( me->fCount > 0 )                       // Check if it was not a zero length write
-		{
+//		if ( me->fCount > 0 )                       // Check if it was not a zero length write
+//		{
 
-			if ( (me->fCount % 64) == 0 )               // If was a multiple of 64 bytes then we need to do a zero length write
-			{
-			
-				me->fWriteActive = true;
-				me->fpPipeOutMDP->setLength( 0 );
-				me->fCount = 0;
-				me->fpOutPipe->Write( me->fpPipeOutMDP, &me->fWriteCompletionInfo );
-				done = false;               // don't complete back to irda quite yet
-			}
-		}
+//			if ( (me->fCount % 64) == 0 )               // If was a multiple of 64 bytes then we need to do a zero length write
+//			{ 
+//				me->changeState( me->fPort, PD_S_TX_BUSY ,PD_S_TX_BUSY );
+//				me->fWriteActive = true;
+//				me->fpPipeOutMDP->setLength( 0 );
+//				me->fCount = 0;
+//				me->fpOutPipe->Write( me->fpPipeOutMDP,1000,1000, &me->fWriteCompletionInfo );
+//				done = false;               // don't complete back to irda quite yet
+//			}
+//		} 
+		
+		me->setUpTransmit();						// just to keep it going??
     }
     
     return;
@@ -3080,7 +3115,7 @@ void nl_bjaelectronics_driver_PL2303::interruptReadComplete( void *obj, void *pa
 		if ( (me->fpDevice->GetVendorID() == SIEMENS_VENDOR_ID ) && (me->fpDevice->GetProductID() == SIEMENS_PRODUCT_ID_X65) ) {
 				status_idx = 0;
 				length = 1;
-				DEBUG_IOLog( 3, "nl_bjaelectronics_driver_PL2303::allocateResources interrupt Buff size = 1\n");
+				DEBUG_IOLog( 3, "nl_bjaelectronics_driver_PL2303::interruptReadComplete interrupt Buff size = 1\n");
 			}
 		dLen = length - remaining;
     	if (dLen != length)
@@ -3152,14 +3187,14 @@ void nl_bjaelectronics_driver_PL2303::dataReadComplete( void *obj, void *param, 
 			UInt32 buflen;
 			buflen = dtlength;
 			buf = &me->fPipeInBuffer[0];
-			DATA_IOLog(3,"nl_bjaelectronics_driver_PL2303: Receive: ");
+			DATA_IOLog(1,"nl_bjaelectronics_driver_PL2303: Receive: ");
 			while ( buflen ){
 				unsigned char c = *buf;
-				DATA_IOLog(3,"[%02x] ",c);
+				DATA_IOLog(1,"[%02x] ",c);
 				buf++;
 				buflen--;
 			}
-			DATA_IOLog(3,"\n");	
+
 #endif	
 			ior = me->addtoQueue( &me->fPort->RX, &me->fPipeInBuffer[0], dtlength );
 		}
@@ -3204,7 +3239,8 @@ bool nl_bjaelectronics_driver_PL2303::allocateRingBuffer( CirQueue *Queue, size_
     UInt8       *Buffer;
 	
 	// Size is ignored and kMaxCirBufferSize, which is 4096, is used.
-	
+	// BJA Hack
+	#define kCirBufferSize 1 
     DEBUG_IOLog(4,"%s(%p)::allocateRingBuffer\n", getName(), this );
     Buffer = (UInt8*)IOMalloc( kMaxCirBufferSize );
 	
@@ -3263,7 +3299,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::setSerialConfiguration( void )
 	IOReturn rtn;
 	IOUSBDevRequest request;
 	char * buf;	
-    DEBUG_IOLog(4,"%s(%p)::setSerialConfiguration baudrate: %d \n", getName(), this, fPort->BaudRate );
+    DEBUG_IOLog(3,"%s(%p)::setSerialConfiguration baudrate: %d \n", getName(), this, fPort->BaudRate );
 	buf = (char *)IOMalloc( 10 );
 	memset(buf, 0x00, 0x07); 
     
@@ -3357,45 +3393,45 @@ IOReturn nl_bjaelectronics_driver_PL2303::setSerialConfiguration( void )
             buf[4] = 0;
             break;
     }
-	DEBUG_IOLog(4,"%s(%p)::setSerialConfiguration - StopBits: %d \n", getName(), this,  buf[4]);
+	DEBUG_IOLog(3,"%s(%p)::setSerialConfiguration - StopBits: %d \n", getName(), this,  buf[4]);
 	
 	
     switch(fPort->TX_Parity)
     {
         case PD_RS232_PARITY_NONE:
             buf[5] = 0;
-			DEBUG_IOLog(4,"%s(%p)::setSerialConfiguration - PARITY_NONE \n", getName(), this);
+			DEBUG_IOLog(3,"%s(%p)::setSerialConfiguration - PARITY_NONE \n", getName(), this);
             break;
             
         case PD_RS232_PARITY_ODD:
             buf[5] = 1;
-			DEBUG_IOLog(4,"%s(%p)::setSerialConfiguration - PARITY_ODD \n", getName(), this);
+			DEBUG_IOLog(3,"%s(%p)::setSerialConfiguration - PARITY_ODD \n", getName(), this);
             break;
             
         case PD_RS232_PARITY_EVEN:
             buf[5] = 2;
-			DEBUG_IOLog(4,"%s(%p)::setSerialConfiguration - PARITY_EVEN \n", getName(), this);
+			DEBUG_IOLog(3,"%s(%p)::setSerialConfiguration - PARITY_EVEN \n", getName(), this);
             break;
             
         case PD_RS232_PARITY_MARK:
 			buf[5] = 3;
-			DEBUG_IOLog(4,"%s(%p)::setSerialConfiguration - PARITY_MARK \n", getName(), this);
+			DEBUG_IOLog(3,"%s(%p)::setSerialConfiguration - PARITY_MARK \n", getName(), this);
 			break;
 			
 		case PD_RS232_PARITY_SPACE:
 			buf[5] = 4;
-			DEBUG_IOLog(4,"%s(%p)::setSerialConfiguration - PARITY_SPACE \n", getName(), this);
+			DEBUG_IOLog(3,"%s(%p)::setSerialConfiguration - PARITY_SPACE \n", getName(), this);
 			break;
 			
         default:
 			buf[5] = 0;
-			DEBUG_IOLog(4,"%s(%p)::setSerialConfiguration - PARITY_NONE \n", getName(), this);
+			DEBUG_IOLog(3,"%s(%p)::setSerialConfiguration - PARITY_NONE \n", getName(), this);
     }
 	
 	if (fPort->CharLength >= 5 && fPort->CharLength <= 8){
 		buf[6] = fPort->CharLength;
     }
-	DEBUG_IOLog(4,"%s(%p)::setSerialConfiguration - Bits: %d \n", getName(), this,  buf[6]);
+	DEBUG_IOLog(3,"%s(%p)::setSerialConfiguration - Bits: %d \n", getName(), this,  buf[6]);
 	
 	request.bmRequestType = USBmakebmRequestType(kUSBOut, kUSBClass, kUSBInterface);
     request.bRequest = SET_LINE_REQUEST;
@@ -3404,7 +3440,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::setSerialConfiguration( void )
 	request.wLength = 7;
 	request.pData = buf;
 	rtn =  fpDevice->DeviceRequest(&request);
-	DEBUG_IOLog(4,"%s(%p)::setSerialConfiguration - return: %p \n", getName(), this,  rtn);
+	DEBUG_IOLog(3,"%s(%p)::setSerialConfiguration - return: %p \n", getName(), this,  rtn);
 	IOFree( buf, 10 );
 	
 
@@ -3829,7 +3865,7 @@ void nl_bjaelectronics_driver_PL2303::checkQueues( PortInfo_t *port )
     {
         if ((SW_FlowControl) && (port->xOffSent))	    // unblock xon/xoff flow control
 			{
-				DEBUG_IOLog(1,"GODVER XON AAN\n");
+				DEBUG_IOLog(1,"XON AAN :(\n");
 
 				port->xOffSent = false;
 				addBytetoQueue(&(port->TX), port->XONchar);
@@ -3857,7 +3893,7 @@ void nl_bjaelectronics_driver_PL2303::checkQueues( PortInfo_t *port )
     {
         if ((SW_FlowControl) && (!port->xOffSent))
 			{
-				DEBUG_IOLog(1,"GODVER XOFF AAN\n");
+				DEBUG_IOLog(1,"XOFF AAN :(\n");
 			
 				port->xOffSent = true;
 				addBytetoQueue(&(port->TX), port->XOFFchar);
@@ -3906,7 +3942,7 @@ bool nl_bjaelectronics_driver_PL2303::setUpTransmit( void )
     size_t      data_Length = 0;
     UInt8       *TempOutBuffer;
 	
-	DEBUG_IOLog(4,"%s(%p)::SetUpTransmit\n", getName(), this);
+	DEBUG_IOLog(2,"%s(%p)::SetUpTransmit\n", getName(), this);
     
 	//  If we are already in the cycle of transmitting characters,
 	//  then we do not need to do anything.
@@ -3914,14 +3950,13 @@ bool nl_bjaelectronics_driver_PL2303::setUpTransmit( void )
     if ( fPort->AreTransmitting == TRUE )
 		return false;
 	
-	// First check if we can actually do anything, also if IrDA has no room we're done for now
 	
     //if ( GetQueueStatus( &fPort->TX ) != queueEmpty )
     if (usedSpaceinQueue(&fPort->TX) > 0)
 	{
 		//data_Length = fIrDA->TXBufferAvailable();
 
-		data_Length = MAX_BLOCK_SIZE;
+		data_Length = MAX_BLOCK_SIZE; // remove maximum 10 bytes from queue
 		if ( data_Length == 0 )
 		{
 			DEBUG_IOLog(4,"%s(%p)::SetUpTransmit - No space in TX buffer available\n", getName(), this);
@@ -3942,17 +3977,18 @@ bool nl_bjaelectronics_driver_PL2303::setUpTransmit( void )
 		}
 		bzero( TempOutBuffer, data_Length );
 		
-		// Fill up the buffer with characters from the queue
-		
-		count = removefromQueue( &fPort->TX, TempOutBuffer, data_Length );
+		// Fill up the buffer with 1 character from the queue
+		//		count = removefromQueue( &fPort->TX, TempOutBuffer, data_Length );
+		// BJA Aanpassing stuut karakter voor karakter
+		count = removefromQueue( &fPort->TX, TempOutBuffer, 1 );
 		
 		fPort->AreTransmitting = TRUE;
 		changeState( fPort, PD_S_TX_BUSY, PD_S_TX_BUSY );
 		
 		startTransmit(0, NULL, count, TempOutBuffer );      // do the "transmit" -- send to IrCOMM
-		
-		changeState( fPort, 0, PD_S_TX_BUSY );
-		fPort->AreTransmitting = false;
+//BJA Dit is niet goed, we moeten dit uitzetten als we een ack hebben van de pl2303, dus datawritecomplete		
+//		changeState( fPort, 0, PD_S_TX_BUSY );
+//		fPort->AreTransmitting = false;
 		
 		IOFree( TempOutBuffer, data_Length );
 		
@@ -4096,6 +4132,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::setBreak( PortInfo_t *port,  bool data
 	request.wIndex = 0;
 	request.wLength = 0;
 	request.pData = NULL;
+
 	rtn =  fpDevice->DeviceRequest(&request);
 	DEBUG_IOLog(4,"%s(%p)::setBreak - return: %p \n", getName(), this,  rtn);
 	return rtn;
