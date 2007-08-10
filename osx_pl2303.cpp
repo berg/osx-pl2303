@@ -132,7 +132,7 @@ IOService *nl_bjaelectronics_driver_PL2303::probe(IOService *provider, SInt32 *s
 
 bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
 {
-    enum pl2303_type type = type_0;
+    enum pl2303_type type = type_1;
 
     fTerminate = false;     // Make sure we don't think we're being terminated
     fPort = NULL;
@@ -211,17 +211,28 @@ bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
 	
     fCommandGate->enable();	
 
-    OSNumber *	deviceClass = (OSNumber *) fpDevice->getProperty(kUSBDeviceClass);
-	DEBUG_IOLog(5,"%s(%p)::start - GetMaxPacketSize: %p DeviceClass %p\n", getName(), this, fpDevice->GetMaxPacketSize(), deviceClass->unsigned8BitValue() );
-	if ( deviceClass->unsigned8BitValue() == 0x02)
-		type = type_0;
-	else if ( fpDevice->GetMaxPacketSize() == 0x40)
-		type = HX;
-	else if ( deviceClass->unsigned8BitValue() == 0x00)
+	OSNumber *	release = (OSNumber *) fpDevice->getProperty(kUSBDeviceReleaseNumber);
+
+	DEBUG_IOLog(1,"%s(%p)::start - Get device version: %p \n", getName(), this, release->unsigned16BitValue() );
+	
+	if (release->unsigned16BitValue()==PROLIFIC_REV_H) {
+		DEBUG_IOLog(1,"%s(%p)::start - Chip type: H \n" );
+		type = type_1; // was rev_H
+	} else if ( release->unsigned16BitValue()==PROLIFIC_REV_X ) {
+		DEBUG_IOLog(1,"%s(%p)::start - Chip type: X \n" );
+		type = rev_HX; // was rev_X
+	} else if ( release->unsigned16BitValue()==PROLIFIC_REV_HX_CHIP_D ) {
+		DEBUG_IOLog(1,"%s(%p)::start - Chip type: HX \n" );
+		type = rev_HX;
+	} else if ( release->unsigned16BitValue()==PROLIFIC_REV_1 ) {
+		DEBUG_IOLog(1,"%s(%p)::start - Chip type: 1 \n" );
 		type = type_1;
-	else if ( deviceClass->unsigned8BitValue() == 0xFF)
-		type = type_1;
-	DEBUG_IOLog(3,"%s(%p)::start - device type: %d\n", getName(), this, type);
+	} else {
+		DEBUG_IOLog(1,"%s(%p)::start - Chip type: unkwown \n" );
+		type = unknown;
+	}
+
+	
     fPort->type = type;
 
 	fUSBStarted = true;  
@@ -608,7 +619,7 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	IOReturn rtn;
 	DEBUG_IOLog(1,"%s(%p)::startSerial \n", getName(), this);
 	
-	
+		
 	
 	/* Ugly hack to make device clean */
 	DEBUG_IOLog(5,"%s(%p)::startSerial RESET DEVICE \n", getName(), this);
@@ -617,7 +628,8 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	if(fpDevice) { fpDevice->close( fpDevice ); }
 	DEBUG_IOLog(5,"%s(%p)::startSerial reset device-1 \n", getName(), this);
 	if(fpDevice) { fpDevice->ResetDevice(); }
-	int i = 0;
+	int i;
+	i = 0;
 	while (!fUSBStarted & (i < 10)) {	IOSleep(10); i++; }
 	DEBUG_IOLog(5,"%s(%p)::startSerial close device-2 timout: %d \n", getName(), this, i);
 	if(fpDevice) { fpDevice->close( fpDevice ); }
@@ -625,16 +637,19 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	if(fpDevice) { fpDevice->ResetDevice(); } 
 	/*    ****************************     */
 		
+
+    if (!fNub) {
+		IOLog("%s(%p)::startSerial fNub not available\n", getName(), this);
+		goto	Fail;
+	}
+	
 	buf = (char *) IOMalloc(10);
     if (!buf) {
 		IOLog("%s(%p)::startSerial could not alloc memory for buf\n", getName(), this);
 		goto	Fail;
 	}
 
-    if (!fNub) {
-		IOLog("%s(%p)::startSerial fNub not available\n", getName(), this);
-		goto	Fail;
-	}
+
 
     // make chip as sane as can be
 #define FISH(a,b,c,d)								\
@@ -670,17 +685,17 @@ bool nl_bjaelectronics_driver_PL2303::startSerial()
 	SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 0, 1);
 	SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 1, 0);
 
-	if (fPort->type == HX) { 
+	if (fPort->type == rev_HX) { 
 		/* HX chip */
 		SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 2, 0x44); 
 		/* reset upstream data pipes */
-         	SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 8, 0);
+        	SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 8, 0);
         	SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 9, 0);
 	} else {
 		SOUP (VENDOR_WRITE_REQUEST_TYPE, VENDOR_WRITE_REQUEST, 2, 0x24);
 	}
 	
-    IOFree(buf, 10);
+    IOFree(buf, 10); 
 	
 	// open the pipe endpoints
 	if (!allocateResources() ) {
@@ -2057,7 +2072,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 				DEBUG_IOLog(1,"%s(%p)::executeEvent - Automatic CTS flowcontrol On\n", getName(), this);
 					IOUSBDevRequest request;
 
-					if (fPort->type == HX ) {
+					if (fPort->type == rev_HX ) {
 						request.wIndex = 0x61;
 					} else {
 						request.wIndex = 0x41;
@@ -2299,7 +2314,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
             } else {
                 port->BreakState = false;
             }
-            setBreak(port, data);
+            setBreak(data);
             setStateGated(state, delta, port); 
 			break;
 			
@@ -2605,7 +2620,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::enqueueEvent( UInt32 event, UInt32 dat
             } else {
                 port->BreakState = false;
             }
-            setBreak(port, data);
+            setBreak(data);
             setStateGated(state, delta, port); 
 			break;
 		case PD_E_DELAY:
@@ -4113,7 +4128,7 @@ UInt32 nl_bjaelectronics_driver_PL2303::generateRxQState( PortInfo_t *port )
 //
 /****************************************************************************************************/
 
-IOReturn nl_bjaelectronics_driver_PL2303::setBreak( PortInfo_t *port,  bool data){
+IOReturn nl_bjaelectronics_driver_PL2303::setBreak( bool data){
 	UInt16 value;
 	IOReturn rtn;
 	IOUSBDevRequest request;
@@ -4137,3 +4152,4 @@ IOReturn nl_bjaelectronics_driver_PL2303::setBreak( PortInfo_t *port,  bool data
 	DEBUG_IOLog(4,"%s(%p)::setBreak - return: %p \n", getName(), this,  rtn);
 	return rtn;
 }
+

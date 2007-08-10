@@ -30,7 +30,12 @@
 #include <IOKit/IOService.h>
 #include <IOKit/serial/IOSerialDriverSync.h>
 #include <IOKit/serial/IORS232SerialStreamSync.h>
-#include <IOKit/usb/IOUSBDevice.h> //providerclass
+#include <IOKit/usb/IOUSBDevice.h> 
+
+#define PROLIFIC_REV_H			0x0202
+#define PROLIFIC_REV_X			0x0300
+#define PROLIFIC_REV_HX_CHIP_D	0x0400
+#define PROLIFIC_REV_1			0x0001
 
 #define baseName        "PL2303-"
 
@@ -152,14 +157,41 @@ enum tXO_State {
 #define VENDOR_READ_REQUEST_TYPE	0xc0
 #define VENDOR_READ_REQUEST			0x01
 
-#define SIEMENS_VENDOR_ID	0x11f5
-#define SIEMENS_PRODUCT_ID_X65	0x0003
+#define SIEMENS_VENDOR_ID			0x11f5
+#define SIEMENS_PRODUCT_ID_X65		0x0003
 
+/*
+ * Device Configuration Registers (DCR0, DCR1, DCR2)
+*/
+
+#define SET_DCR0                                0x00
+#define GET_DCR0                                0x80
+#define DCR0_INIT                               0x01
+#define DCR0_INIT_H                             0x41
+#define DCR0_INIT_X                             0x61
+
+#define SET_DCR1                                0x01
+#define GET_DCR1                                0x81
+#define DCR1_INIT_H                             0x80
+#define DCR1_INIT_X                             0x00
+
+#define SET_DCR2                                0x02
+#define GET_DCR2                                0x82
+#define DCR2_INIT_H                             0x24
+#define DCR2_INIT_X                             0x44
+ 
+/*
+ * On-chip Date Buffers:
+ */
+#define RESET_DOWNSTREAM_DATA_PIPE              0x08
+#define RESET_UPSTREAM_DATA_PIPE                0x09
 
 enum pl2303_type {
-	type_0,		/* don't know the difference between type 0 and */
-	type_1,		/* type 1, until someone from prolific tells us... */
-	HX,		/* HX version of the pl2303 chip */
+	unknown,
+	type_1,		/* don't know the difference between type 0 and */
+	rev_X,		/* type 1, until someone from prolific tells us... */
+	rev_HX,		/* HX version of the pl2303 chip */
+	rev_H
 };
 
 
@@ -434,5 +466,8 @@ private:
     /**** FlowControl ****/
 	IOReturn        setControlLines( PortInfo_t *port );
     UInt32			generateRxQState( PortInfo_t *port );
-	IOReturn		setBreak( PortInfo_t *port,  bool data);
+	IOReturn		setBreak( bool data);
+	
+	IOReturn        vendor_write0( UInt16 value, UInt16 index);
+
 };
