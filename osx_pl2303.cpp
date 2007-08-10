@@ -59,8 +59,8 @@ extern "C" {
 
 //To enable logging remove comments from #define DEBUG and #define DATALOG
 //Use USB Prober to monitor the logs.
-#define DEBUG
-#define DATALOG
+//#define DEBUG
+//#define DATALOG
 
 #ifdef DEBUG
 #define DEBUG_IOLog(args...) USBLog (args)
