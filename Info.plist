@@ -183,6 +183,29 @@
 			<key>idVendor</key>
 			<integer>1412</integer>
 		</dict>
+		<key>05ad_0fba</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>nl.bjaelectronics.driver.PL2303</string>
+			<key>IOClass</key>
+			<string>nl_bjaelectronics_driver_PL2303</string>
+			<key>IOKitDebug</key>
+			<integer>0</integer>
+			<key>IOMatchCategory</key>
+			<string>ProfilicSerialUSB</string>
+			<key>IOProviderClass</key>
+			<string>IOUSBDevice</string>
+			<key>IOResourceMatch</key>
+			<string>IOKit</string>
+			<key>bConfigurationValue</key>
+			<integer>1</integer>
+			<key>bInterfaceNumber</key>
+			<integer>0</integer>
+			<key>idProduct</key>
+			<integer>4026</integer>
+			<key>idVendor</key>
+			<integer>1453</integer>
+		</dict>
 		<key>067b_04bb</key>
 		<dict>
 			<key>CFBundleIdentifier</key>
@@ -344,6 +367,29 @@
 			<key>idVendor</key>
 			<integer>1931</integer>
 		</dict>
+		<key>0830_0080</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>nl.bjaelectronics.driver.PL2303</string>
+			<key>IOClass</key>
+			<string>nl_bjaelectronics_driver_PL2303</string>
+			<key>IOKitDebug</key>
+			<integer>0</integer>
+			<key>IOMatchCategory</key>
+			<string>ProfilicSerialUSB</string>
+			<key>IOProviderClass</key>
+			<string>IOUSBDevice</string>
+			<key>IOResourceMatch</key>
+			<string>IOKit</string>
+			<key>bConfigurationValue</key>
+			<integer>1</integer>
+			<key>bInterfaceNumber</key>
+			<integer>0</integer>
+			<key>idProduct</key>
+			<integer>128</integer>
+			<key>idVendor</key>
+			<integer>2096</integer>
+		</dict>
 		<key>0df7_0620</key>
 		<dict>
 			<key>CFBundleIdentifier</key>
@@ -481,6 +527,29 @@
 			<integer>16422</integer>
 			<key>idVendor</key>
 			<integer>5203</integer>
+		</dict>
+		<key>19d2_fffd</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>nl.bjaelectronics.driver.PL2303</string>
+			<key>IOClass</key>
+			<string>nl_bjaelectronics_driver_PL2303</string>
+			<key>IOKitDebug</key>
+			<integer>0</integer>
+			<key>IOMatchCategory</key>
+			<string>ProfilicSerialUSB</string>
+			<key>IOProviderClass</key>
+			<string>IOUSBDevice</string>
+			<key>IOResourceMatch</key>
+			<string>IOKit</string>
+			<key>bConfigurationValue</key>
+			<integer>1</integer>
+			<key>bInterfaceNumber</key>
+			<integer>0</integer>
+			<key>idProduct</key>
+			<integer>65533</integer>
+			<key>idVendor</key>
+			<integer>6610</integer>
 		</dict>
 		<key>2303_1659</key>
 		<dict>
