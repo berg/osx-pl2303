@@ -10,6 +10,10 @@
 		32D94FC60562CBF700B6AF17 /* osx_pl2303.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A224C3EFF42367911CA2CB7 /* osx_pl2303.h */; };
 		32D94FC80562CBF700B6AF17 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 089C167DFE841241C02AAC07 /* InfoPlist.strings */; };
 		32D94FCA0562CBF700B6AF17 /* osx_pl2303.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1A224C3FFF42367911CA2CB7 /* osx_pl2303.cpp */; settings = {ATTRIBUTES = (); }; };
+		86D61F3B112ADA40006B2103 /* osx_pl2303.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A224C3EFF42367911CA2CB7 /* osx_pl2303.h */; };
+		86D61F3D112ADA40006B2103 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 089C167DFE841241C02AAC07 /* InfoPlist.strings */; };
+		86D61F3E112ADA40006B2103 /* COPYING in Resources */ = {isa = PBXBuildFile; fileRef = 906D8A5709AF0FBC00CAB1B1 /* COPYING */; };
+		86D61F40112ADA40006B2103 /* osx_pl2303.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1A224C3FFF42367911CA2CB7 /* osx_pl2303.cpp */; settings = {ATTRIBUTES = (); }; };
 		9056EE680A3AF19000901FF8 /* osx_pl2303.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1A224C3FFF42367911CA2CB7 /* osx_pl2303.cpp */; };
 		9056EE6C0A3AF1AA00901FF8 /* osx_pl2303.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A224C3EFF42367911CA2CB7 /* osx_pl2303.h */; };
 		9056EE6D0A3AF1C000901FF8 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 089C167DFE841241C02AAC07 /* InfoPlist.strings */; };
@@ -17,35 +21,29 @@
 		906D8A5809AF0FBC00CAB1B1 /* COPYING in Resources */ = {isa = PBXBuildFile; fileRef = 906D8A5709AF0FBC00CAB1B1 /* COPYING */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXBuildStyle section */
-		06AA1265FFB2107B11CA28AA /* Debug */ = {
-			isa = PBXBuildStyle;
-			buildSettings = {
-			};
-			name = Debug;
-		};
-		06AA1266FFB2107B11CA28AA /* Release */ = {
-			isa = PBXBuildStyle;
-			buildSettings = {
-			};
-			name = Release;
-		};
-/* End PBXBuildStyle section */
-
 /* Begin PBXFileReference section */
 		089C167EFE841241C02AAC07 /* English */ = {isa = PBXFileReference; fileEncoding = 10; lastKnownFileType = text.plist.strings; name = English; path = English.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		1A224C3EFF42367911CA2CB7 /* osx_pl2303.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = osx_pl2303.h; sourceTree = "<group>"; };
 		1A224C3FFF42367911CA2CB7 /* osx_pl2303.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = osx_pl2303.cpp; sourceTree = "<group>"; };
-		32D94FCF0562CBF700B6AF17 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = Info.plist; sourceTree = "<group>"; };
+		32D94FCF0562CBF700B6AF17 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		32D94FD00562CBF700B6AF17 /* osx-pl2303.kext */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "osx-pl2303.kext"; sourceTree = BUILT_PRODUCTS_DIR; };
+		86D61F47112ADA40006B2103 /* osx-pl2303.kext */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "osx-pl2303.kext"; sourceTree = BUILT_PRODUCTS_DIR; };
+		86D61F48112ADA40006B2103 /* Info copy.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info copy.plist"; sourceTree = "<group>"; };
 		8DA8362C06AD9B9200E5AC22 /* Kernel.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Kernel.framework; path = /System/Library/Frameworks/Kernel.framework; sourceTree = "<absolute>"; };
 		906D8A5709AF0FBC00CAB1B1 /* COPYING */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = text; path = COPYING; sourceTree = "<group>"; };
 		90FB12BF0A3AE7D200C1B579 /* release-osx-10.3.x.kext */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "release-osx-10.3.x.kext"; sourceTree = BUILT_PRODUCTS_DIR; };
-		90FB12C00A3AE7D200C1B579 /* release-osx-10.3.x-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = "release-osx-10.3.x-Info.plist"; sourceTree = "<group>"; };
+		90FB12C00A3AE7D200C1B579 /* release-osx-10.3.x-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "release-osx-10.3.x-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		32D94FCB0562CBF700B6AF17 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		86D61F41112ADA40006B2103 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -81,6 +79,7 @@
 			children = (
 				32D94FCF0562CBF700B6AF17 /* Info.plist */,
 				089C167DFE841241C02AAC07 /* InfoPlist.strings */,
+				86D61F48112ADA40006B2103 /* Info copy.plist */,
 			);
 			name = Resources;
 			sourceTree = "<group>";
@@ -90,6 +89,7 @@
 			children = (
 				32D94FD00562CBF700B6AF17 /* osx-pl2303.kext */,
 				90FB12BF0A3AE7D200C1B579 /* release-osx-10.3.x.kext */,
+				86D61F47112ADA40006B2103 /* osx-pl2303.kext */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -121,6 +121,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		86D61F3A112ADA40006B2103 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				86D61F3B112ADA40006B2103 /* osx_pl2303.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9056EE6A0A3AF1A200901FF8 /* Headers */ = {
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
@@ -144,14 +152,32 @@
 			);
 			buildRules = (
 			);
-			buildSettings = {
-			};
 			dependencies = (
 			);
 			name = "osx-pl2303-10.4-universal";
 			productInstallPath = "$(SYSTEM_LIBRARY_DIR)/Extensions";
 			productName = "osx-pl2303";
 			productReference = 32D94FD00562CBF700B6AF17 /* osx-pl2303.kext */;
+			productType = "com.apple.product-type.kernel-extension.iokit";
+		};
+		86D61F39112ADA40006B2103 /* osx-pl2303-10.6-universal */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 86D61F43112ADA40006B2103 /* Build configuration list for PBXNativeTarget "osx-pl2303-10.6-universal" */;
+			buildPhases = (
+				86D61F3A112ADA40006B2103 /* Headers */,
+				86D61F3C112ADA40006B2103 /* Resources */,
+				86D61F3F112ADA40006B2103 /* Sources */,
+				86D61F41112ADA40006B2103 /* Frameworks */,
+				86D61F42112ADA40006B2103 /* Rez */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "osx-pl2303-10.6-universal";
+			productInstallPath = "$(SYSTEM_LIBRARY_DIR)/Extensions";
+			productName = "osx-pl2303";
+			productReference = 86D61F47112ADA40006B2103 /* osx-pl2303.kext */;
 			productType = "com.apple.product-type.kernel-extension.iokit";
 		};
 		90FB12BE0A3AE7D200C1B579 /* osx-pl2303-10.3.9 */ = {
@@ -166,48 +192,11 @@
 			);
 			buildRules = (
 			);
-			buildSettings = {
-				GCC_ENABLE_FIX_AND_CONTINUE = YES;
-				GCC_MODEL_TUNING = G5;
-				INFOPLIST_FILE = "release-osx-10.3.x-Info.plist";
-				INSTALL_PATH = "$(SYSTEM_LIBRARY_DIR)/Extensions";
-				MODULE_NAME = com.yourcompany.driver.release_osx_10_3_x;
-				MODULE_VERSION = 1.0.0d1;
-				PREBINDING = NO;
-				PRODUCT_NAME = "release-osx-10.3.x";
-				WRAPPER_EXTENSION = kext;
-				ZERO_LINK = YES;
-			};
 			dependencies = (
 			);
 			name = "osx-pl2303-10.3.9";
 			productName = "release-osx-10.3.x";
 			productReference = 90FB12BF0A3AE7D200C1B579 /* release-osx-10.3.x.kext */;
-			productSettingsXML = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-<!DOCTYPE plist PUBLIC \"-//Apple Computer//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
-<plist version=\"1.0\">
-<dict>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>English</string>
-	<key>CFBundleExecutable</key>
-	<string>${EXECUTABLE_NAME}</string>
-	<key>CFBundleIdentifier</key>
-	<string>com.yourcompany.driver.release-osx-10.3.x</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundlePackageType</key>
-	<string>KEXT</string>
-	<key>CFBundleSignature</key>
-	<string>????</string>
-	<key>CFBundleVersion</key>
-	<string>1.0.0d1</string>
-	<key>IOKitPersonalities</key>
-	<dict/>
-	<key>OSBundleLibraries</key>
-	<dict/>
-</dict>
-</plist>
-";
 			productType = "com.apple.product-type.kernel-extension.iokit";
 		};
 /* End PBXNativeTarget section */
@@ -216,16 +205,13 @@
 		089C1669FE841209C02AAC07 /* Project object */ = {
 			isa = PBXProject;
 			buildConfigurationList = 1DEB91DD08733DB10010E9CD /* Build configuration list for PBXProject "osx-pl2303" */;
-			buildSettings = {
-			};
-			buildStyles = (
-				06AA1265FFB2107B11CA28AA /* Debug */,
-				06AA1266FFB2107B11CA28AA /* Release */,
-			);
+			compatibilityVersion = "Xcode 2.4";
 			hasScannedForEncodings = 1;
 			mainGroup = 089C166AFE841209C02AAC07 /* osx-pl2303 */;
 			projectDirPath = "";
+			projectRoot = "";
 			targets = (
+				86D61F39112ADA40006B2103 /* osx-pl2303-10.6-universal */,
 				32D94FC30562CBF700B6AF17 /* osx-pl2303-10.4-universal */,
 				90FB12BE0A3AE7D200C1B579 /* osx-pl2303-10.3.9 */,
 			);
@@ -239,6 +225,15 @@
 			files = (
 				32D94FC80562CBF700B6AF17 /* InfoPlist.strings in Resources */,
 				906D8A5809AF0FBC00CAB1B1 /* COPYING in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		86D61F3C112ADA40006B2103 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				86D61F3D112ADA40006B2103 /* InfoPlist.strings in Resources */,
+				86D61F3E112ADA40006B2103 /* COPYING in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -261,6 +256,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		86D61F42112ADA40006B2103 /* Rez */ = {
+			isa = PBXRezBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9056EE6F0A3AF1D900901FF8 /* Rez */ = {
 			isa = PBXRezBuildPhase;
 			buildActionMask = 2147483647;
@@ -276,6 +278,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				32D94FCA0562CBF700B6AF17 /* osx_pl2303.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		86D61F3F112ADA40006B2103 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				86D61F40112ADA40006B2103 /* osx_pl2303.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -360,6 +370,134 @@
 				SDKROOT = /Developer/SDKs/MacOSX10.4u.sdk;
 			};
 			name = "Release-10.4-universal";
+		};
+		86D61F44112ADA40006B2103 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1)";
+				ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1 = "x86_64 i386 ppc";
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1.0.0d1;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_FIX_AND_CONTINUE = YES;
+				GCC_MODEL_TUNING = G5;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				INFOPLIST_FILE = Info.plist;
+				INSTALL_PATH = "$(SYSTEM_LIBRARY_DIR)/Extensions";
+				MODULE_NAME = nl.bjaelectronics.driver.PL2303;
+				MODULE_VERSION = 1.0.0d1;
+				PRODUCT_NAME = "osx-pl2303";
+				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.6.sdk";
+				VALID_ARCHS = "i386 x86_64";
+				WRAPPER_EXTENSION = kext;
+				ZERO_LINK = YES;
+			};
+			name = Debug;
+		};
+		86D61F45112ADA40006B2103 /* Release-10.4-universal */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1)";
+				ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1 = "x86_64 i386 ppc";
+				CURRENT_PROJECT_VERSION = 1.0.0d1;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_MODEL_TUNING = G5;
+				INFOPLIST_FILE = Info.plist;
+				INSTALL_PATH = "$(SYSTEM_LIBRARY_DIR)/Extensions";
+				MODULE_NAME = nl.bjaelectronics.driver.PL2303;
+				MODULE_VERSION = 1.0.0d1;
+				PRODUCT_NAME = "osx-pl2303";
+				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.6.sdk";
+				VALID_ARCHS = "i386 x86_64";
+				WRAPPER_EXTENSION = kext;
+			};
+			name = "Release-10.4-universal";
+		};
+		86D61F46112ADA40006B2103 /* Release-10.3.9 */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1)";
+				ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1 = "x86_64 i386 ppc";
+				CURRENT_PROJECT_VERSION = 1.0.0d1;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_MODEL_TUNING = G5;
+				INFOPLIST_FILE = Info.plist;
+				INSTALL_PATH = "$(SYSTEM_LIBRARY_DIR)/Extensions";
+				MODULE_NAME = nl.bjaelectronics.driver.PL2303;
+				MODULE_VERSION = 1.0.0d1;
+				PRODUCT_NAME = "osx-pl2303";
+				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.6.sdk";
+				VALID_ARCHS = "i386 x86_64";
+				WRAPPER_EXTENSION = kext;
+			};
+			name = "Release-10.3.9";
+		};
+		86D61F75112ADD8B006B2103 /* Release-10.6-universal */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.4;
+				PREBINDING = NO;
+				SDKROOT = /Developer/SDKs/MacOSX10.4u.sdk;
+			};
+			name = "Release-10.6-universal";
+		};
+		86D61F76112ADD8B006B2103 /* Release-10.6-universal */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1)";
+				ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1 = "x86_64 i386 ppc";
+				CURRENT_PROJECT_VERSION = 1.0.0d1;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_MODEL_TUNING = G5;
+				INFOPLIST_FILE = Info.plist;
+				INSTALL_PATH = "$(SYSTEM_LIBRARY_DIR)/Extensions";
+				MODULE_NAME = nl.bjaelectronics.driver.PL2303;
+				MODULE_VERSION = 1.0.0d1;
+				PRODUCT_NAME = "osx-pl2303";
+				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.6.sdk";
+				VALID_ARCHS = "i386 x86_64";
+				WRAPPER_EXTENSION = kext;
+			};
+			name = "Release-10.6-universal";
+		};
+		86D61F77112ADD8B006B2103 /* Release-10.6-universal */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = (
+					ppc,
+					i386,
+				);
+				CURRENT_PROJECT_VERSION = 1.0.0d1;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_MODEL_TUNING = G5;
+				INFOPLIST_FILE = Info.plist;
+				INSTALL_PATH = "$(SYSTEM_LIBRARY_DIR)/Extensions";
+				MODULE_NAME = com.yourcompany.driver.osx_pl2303;
+				MODULE_VERSION = 1.0.0d1;
+				PRODUCT_NAME = "osx-pl2303";
+				WRAPPER_EXTENSION = kext;
+			};
+			name = "Release-10.6-universal";
+		};
+		86D61F78112ADD8B006B2103 /* Release-10.6-universal */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = YES;
+				GCC_ENABLE_FIX_AND_CONTINUE = NO;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_MODEL_TUNING = G5;
+				INFOPLIST_FILE = "release-osx-10.3.x-Info.plist";
+				INSTALL_PATH = "$(SYSTEM_LIBRARY_DIR)/Extensions";
+				MODULE_NAME = com.yourcompany.driver.release_osx_10_3_x;
+				MODULE_VERSION = 1.0.0d1;
+				PREBINDING = NO;
+				PRODUCT_NAME = "release-osx-10.3.x";
+				WRAPPER_EXTENSION = kext;
+				ZERO_LINK = NO;
+			};
+			name = "Release-10.6-universal";
 		};
 		90FB12C20A3AE7D300C1B579 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -454,31 +592,45 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1DEB91DA08733DB10010E9CD /* Debug */,
+				86D61F77112ADD8B006B2103 /* Release-10.6-universal */,
 				1DEB91DB08733DB10010E9CD /* Release-10.4-universal */,
 				90FB12C70A3AE90D00C1B579 /* Release-10.3.9 */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = "Release-10.4-universal";
+			defaultConfigurationName = "Release-10.6-universal";
 		};
 		1DEB91DD08733DB10010E9CD /* Build configuration list for PBXProject "osx-pl2303" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1DEB91DE08733DB10010E9CD /* Debug */,
+				86D61F75112ADD8B006B2103 /* Release-10.6-universal */,
 				1DEB91DF08733DB10010E9CD /* Release-10.4-universal */,
 				90FB12C90A3AE90D00C1B579 /* Release-10.3.9 */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = "Release-10.4-universal";
+			defaultConfigurationName = "Release-10.6-universal";
+		};
+		86D61F43112ADA40006B2103 /* Build configuration list for PBXNativeTarget "osx-pl2303-10.6-universal" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				86D61F44112ADA40006B2103 /* Debug */,
+				86D61F76112ADD8B006B2103 /* Release-10.6-universal */,
+				86D61F45112ADA40006B2103 /* Release-10.4-universal */,
+				86D61F46112ADA40006B2103 /* Release-10.3.9 */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = "Release-10.6-universal";
 		};
 		90FB12C10A3AE7D300C1B579 /* Build configuration list for PBXNativeTarget "osx-pl2303-10.3.9" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				90FB12C20A3AE7D300C1B579 /* Debug */,
+				86D61F78112ADD8B006B2103 /* Release-10.6-universal */,
 				90FB12C30A3AE7D300C1B579 /* Release-10.4-universal */,
 				90FB12C80A3AE90D00C1B579 /* Release-10.3.9 */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = "Release-10.4-universal";
+			defaultConfigurationName = "Release-10.6-universal";
 		};
 /* End XCConfigurationList section */
 	};

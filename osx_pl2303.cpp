@@ -51,8 +51,6 @@
 #include <IOKit/usb/IOUSBLog.h>
 
 
-#include <UserNotification/KUNCUserNotifications.h>
-
 extern "C" {
 #include <pexpert/pexpert.h>
 }
@@ -133,6 +131,8 @@ IOService *nl_bjaelectronics_driver_PL2303::probe(IOService *provider, SInt32 *s
 bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
 {
     enum pl2303_type type = type_1;
+  
+    OSNumber *release;
 
     fTerminate = false;     // Make sure we don't think we're being terminated
     fPort = NULL;
@@ -211,7 +211,7 @@ bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
 	
     fCommandGate->enable();	
 
-	OSNumber *	release = (OSNumber *) fpDevice->getProperty(kUSBDeviceReleaseNumber);
+        release = (OSNumber *) fpDevice->getProperty(kUSBDeviceReleaseNumber);
 
 	DEBUG_IOLog(1,"%s(%p)::start - Get device version: %p \n", getName(), this, release->unsigned16BitValue() );
 	
@@ -1305,15 +1305,6 @@ IOReturn err = kIOReturnSuccess;
 				}
 				DEBUG_IOLog(4,"%s(%p)::message - kIOMessageServiceIsTerminated send KUNCUserNotificationDisplayNotice\n", getName(), this);
 
-				KUNCUserNotificationDisplayNotice(
-												  0,      // Timeout in seconds
-												  0,      // Flags (for later usage)
-												  "",     // iconPath (not supported yet)
-												  "",     // soundPath (not supported yet)
-												  "",     // localizationPath (not supported  yet)
-												  "USB Serial Unplug Notice",       // the header
-												  "The USB Serial Pod has been unplugged while an Application was still active. This can result in loss of data.",
-												  "OK");
 			} else {
 				stopSerial( false);         // stop serial now
 			
@@ -1385,16 +1376,6 @@ IOReturn err = kIOReturnSuccess;
 				{
 					fTerminate = true;
 					DEBUG_IOLog(4,"%s(%p)::message - startSerial failed\n", getName(), this);
-				    KUNCUserNotificationDisplayNotice(
-					    0,      // Timeout in seconds
-					    0,      // Flags (for later usage)
-					    "",     // iconPath (not supported yet)
-					    "",     // soundPath (not supported yet)
-					    "",     // localizationPath (not supported  yet)
-					    "USB Serial Problem Notice",      // the header
-		    		    "The USB Serial Pod has experienced difficulties. To continue either replug the device (if external) or restart the computer",
-					    "OK");
-
 				} 
 				else {
 					DEBUG_IOLog(4,"%s(%p)::message - startSerial successful\n", getName(), this);
@@ -1814,9 +1795,12 @@ IOReturn nl_bjaelectronics_driver_PL2303::setState(UInt32 state, UInt32 mask, vo
 IOReturn nl_bjaelectronics_driver_PL2303::setStateAction(OSObject *owner, void *arg0, void *arg1, void *arg2, void *)
 {
     DEBUG_IOLog(4,"nl_bjaelectronics_driver_PL2303::setStateAction\n");
-
+  
+#if defined(__x86_64__)
+    return ((nl_bjaelectronics_driver_PL2303 *)owner)->setStateGated((UInt64)arg0, (UInt64)arg1, (void *)arg2);
+#else
     return ((nl_bjaelectronics_driver_PL2303 *)owner)->setStateGated((UInt32)arg0, (UInt32)arg1, (void *)arg2);
-    
+#endif
 }/* end setStateAction */
 
 /****************************************************************************************************/
@@ -1907,8 +1891,11 @@ IOReturn nl_bjaelectronics_driver_PL2303::watchStateAction(OSObject *owner, void
 {
     DEBUG_IOLog(4,"nl_bjaelectronics_driver_PL2303::watchStateAction\n");
 
+#if defined(__x86_64__)
+    return ((nl_bjaelectronics_driver_PL2303 *)owner)->watchStateGated((UInt32 *)arg0, (UInt64)arg1);
+#else
     return ((nl_bjaelectronics_driver_PL2303 *)owner)->watchStateGated((UInt32 *)arg0, (UInt32)arg1);
-    
+#endif
 }/* end watchStateAction */
 
 
@@ -2005,8 +1992,11 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventAction(OSObject *owner, vo
 {
 	DEBUG_IOLog(4,"nl_bjaelectronics_driver_PL2303::executeEventAction\n");
 
-	return ((nl_bjaelectronics_driver_PL2303 *)owner)->executeEventGated((UInt32)arg0, (UInt32)arg1, (void *)arg2);
-    
+#if defined(__x86_64__)
+	return ((nl_bjaelectronics_driver_PL2303 *)owner)->executeEventGated((UInt64)arg0, (UInt64)arg1, (void *)arg2);
+#else
+        return ((nl_bjaelectronics_driver_PL2303 *)owner)->executeEventGated((UInt32)arg0, (UInt32)arg1, (void *)arg2);
+#endif
 }/* end executeEventAction */
 
 
@@ -2409,8 +2399,11 @@ IOReturn nl_bjaelectronics_driver_PL2303::requestEventAction(OSObject *owner, vo
 {
 	DEBUG_IOLog(4,"nl_bjaelectronics_driver_PL2303::requestEventAction\n");
 
-    return ((nl_bjaelectronics_driver_PL2303 *)owner)->requestEventGated((UInt32)arg0, (UInt32 *)arg1, (void *)arg2);
-    
+#if defined(__x86_64__)
+    return ((nl_bjaelectronics_driver_PL2303 *)owner)->requestEventGated((UInt64)arg0, (UInt32 *)arg1, (void *)arg2);
+#else
+    return ((nl_bjaelectronics_driver_PL2303 *)owner)->requestEventGated((UInt32)arg0, (UInt32 *)arg1, (void *)arg2);  
+#endif
 }/* end requestEventAction */
 
 /****************************************************************************************************/
@@ -2720,8 +2713,11 @@ IOReturn nl_bjaelectronics_driver_PL2303::enqueueData(UInt8 *buffer, UInt32 size
 
 IOReturn nl_bjaelectronics_driver_PL2303::enqueueDataAction(OSObject *owner, void *arg0, void *arg1, void *arg2, void *arg3)
 {
+#if defined(__x86_64__)
+    return ((nl_bjaelectronics_driver_PL2303 *)owner)->enqueueDataGated((UInt8 *)arg0, (UInt64)arg1, (UInt32 *)arg2, (bool)arg3);
+#else
     return ((nl_bjaelectronics_driver_PL2303 *)owner)->enqueueDataGated((UInt8 *)arg0, (UInt32)arg1, (UInt32 *)arg2, (bool)arg3);
-    
+#endif
 }/* end enqueueDataAction */
 
 /****************************************************************************************************/
@@ -2867,9 +2863,12 @@ IOReturn nl_bjaelectronics_driver_PL2303::dequeueData(UInt8 *buffer, UInt32 size
 IOReturn nl_bjaelectronics_driver_PL2303::dequeueDataAction(OSObject *owner, void *arg0, void *arg1, void *arg2, void *arg3)
 {
 	DEBUG_IOLog(4,"nl_bjaelectronics_driver_PL2303::dequeueDataAction\n");
-
+  
+#if defined(__x86_64__)
+    return ((nl_bjaelectronics_driver_PL2303 *)owner)->dequeueDataGated((UInt8 *)arg0, (UInt64)arg1, (UInt32 *)arg2, (UInt64)arg3);
+#else
     return ((nl_bjaelectronics_driver_PL2303 *)owner)->dequeueDataGated((UInt8 *)arg0, (UInt32)arg1, (UInt32 *)arg2, (UInt32)arg3);
-    
+#endif
 }/* end dequeueDataAction */
 
  /****************************************************************************************************/

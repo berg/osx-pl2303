@@ -410,11 +410,7 @@ public:
     virtual	IOReturn	requestEventGated(UInt32 event, UInt32 *data, void *refCon);
     virtual	IOReturn	enqueueDataGated(UInt8 *buffer, UInt32 size, UInt32 *count, bool sleep);
     virtual	IOReturn	dequeueDataGated(UInt8 *buffer, UInt32 size, UInt32 *count, UInt32 min);	
-	
-    // Power management routines
-    virtual unsigned long initialPowerStateForDomainState ( IOPMPowerFlags );
-    virtual IOReturn    setPowerState(unsigned long powerStateOrdinal, IOService * whatDevice);
-	
+		
 	bool				setUpTransmit( void );
 	IOReturn			setSerialConfiguration( void );
     IOReturn			startTransmit( UInt32 control_length, UInt8 *control_buffer, UInt32 data_length, UInt8 *data_buffer );
