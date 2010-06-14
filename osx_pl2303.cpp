@@ -211,7 +211,7 @@ bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
 	
     fCommandGate->enable();	
 
-        release = (OSNumber *) fpDevice->getProperty(kUSBDeviceReleaseNumber);
+   release = (OSNumber *) fpDevice->getProperty(kUSBDeviceReleaseNumber);
 
 	DEBUG_IOLog(1,"%s(%p)::start - Get device version: %p \n", getName(), this, release->unsigned16BitValue() );
 	
@@ -239,11 +239,10 @@ bool nl_bjaelectronics_driver_PL2303::start(IOService *provider)
 	
 	DEBUG_IOLog(3,"%s(%p)::start - Allocate resources \n", getName(), this);
 
-
-
 		
 	return true;
-	
+
+
 Fail:
 	if (fNub) 
 	{
@@ -982,11 +981,14 @@ bool nl_bjaelectronics_driver_PL2303::createSuffix( unsigned char *sufKey )
 		{
 			DEBUG_IOLog(5,"%s(%p)::createSuffix serial number: %s\n", getName(), this, serBuf );
 			
-			if ( (strlen((char *)&serBuf) < 9) && (strlen((char *)&serBuf) > 0) )
+			int serBufLength = strlen((char *)&serBuf);
+         
+			if ( (serBufLength > 0) && (serBufLength < 9) )
 			{
-				strcpy( (char *)sufKey, (const char *)&serBuf);
+				strncpy( (char *)sufKey, (const char *)&serBuf, serBufLength);
 				keyOK = true;
 			}           
+
 		} else {
 			IOLog("%s(%p)::createSuffix error reading serial number string\n", getName(), this );
 		} 
@@ -1162,7 +1164,7 @@ bool nl_bjaelectronics_driver_PL2303::createSerialStream()
 				DEBUG_IOLog(4,"%s(%p)::createSerialStream product name: %s\n", getName(), this, fProductName);
 				if ( strlen((char *)fProductName) == 0 )        // believe it or not this sometimes happens (null string with an index defined???)
 				{
-					strcpy( (char *)fProductName, defaultName);
+					strncpy( (char *)fProductName, defaultName, (size_t) productNameLength);
 				}
 				fNub->setProperty( (const char *)propertyTag, (const char *)fProductName );
 			}
@@ -3062,7 +3064,7 @@ void nl_bjaelectronics_driver_PL2303::dataWriteComplete( void *obj, void *param,
     nl_bjaelectronics_driver_PL2303  *me = (nl_bjaelectronics_driver_PL2303*)obj;
 	DEBUG_IOLog(1,"nl_bjaelectronics_driver_PL2303::dataWriteComplete return code c: %d, fcount: %d,  remaining: %d\n", rc, me->fCount,remaining );
 
-    Boolean done = true;                // write really finished?
+    // Boolean done = true;                // write really finished?  // use is commented out below.
     me->fWriteActive = false;
 // BJA we zijn nu klaar dus zet TX BUSY weer uit
     me->changeState( me->fPort, 0, PD_S_TX_BUSY );
@@ -3074,7 +3076,8 @@ void nl_bjaelectronics_driver_PL2303::dataWriteComplete( void *obj, void *param,
 
     // in a transmit complete, but need to manually transmit a zero-length packet
     // if it's a multiple of the max usb packet size for the bulk-out pipe (64 bytes)
-   if ( rc == kIOReturnSuccess )   /* If operation returned ok:    */
+    
+   if ( rc == kIOReturnSuccess )   // If operation returned ok
    {
 
 //		if ( me->fCount > 0 )                       // Check if it was not a zero length write
@@ -4151,4 +4154,3 @@ IOReturn nl_bjaelectronics_driver_PL2303::setBreak( bool data){
 	DEBUG_IOLog(4,"%s(%p)::setBreak - return: %p \n", getName(), this,  rtn);
 	return rtn;
 }
-
