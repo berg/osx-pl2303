@@ -12,7 +12,7 @@ bad, I guess.
 
 That said, if you want to cut to the chase and grab the driver, a nice
 readymade PKG is here:
-http://github.com/downloads/failberg/osx-pl2303/osx-pl2303-0.4.0-failberg.pkg
+http://github.com/downloads/failberg/osx-pl2303/osx-pl2303-0.4.1-failberg.pkg
 
 I'm happy to accept additional patches onto this - feel free to fork and
 send a pull request and I'll try to get new builds done in a relatively
