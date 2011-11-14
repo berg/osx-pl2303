@@ -985,7 +985,7 @@ bool nl_bjaelectronics_driver_PL2303::createSuffix( unsigned char *sufKey )
          
 			if ( (serBufLength > 0) && (serBufLength < 9) )
 			{
-				strncpy( (char *)sufKey, (const char *)&serBuf, serBufLength);
+				strlcpy( (char *)sufKey, (const char *)&serBuf, sizeof(serBuf));
 				keyOK = true;
 			}           
 
@@ -1164,7 +1164,7 @@ bool nl_bjaelectronics_driver_PL2303::createSerialStream()
 				DEBUG_IOLog(4,"%s(%p)::createSerialStream product name: %s\n", getName(), this, fProductName);
 				if ( strlen((char *)fProductName) == 0 )        // believe it or not this sometimes happens (null string with an index defined???)
 				{
-					strncpy( (char *)fProductName, defaultName, (size_t) productNameLength);
+					strlcpy( (char *)fProductName, defaultName, (size_t) productNameLength);
 				}
 				fNub->setProperty( (const char *)propertyTag, (const char *)fProductName );
 			}
@@ -2248,7 +2248,7 @@ IOReturn nl_bjaelectronics_driver_PL2303::executeEventGated( UInt32 event, UInt3
 			
 		case PD_RS232_E_STOP_BITS:
 			DEBUG_IOLog(4,"%s(%p)::executeEvent - PD_RS232_E_STOP_BITS\n", getName(), this );
-			if ( (data < 0) || (data > 20) )
+			if ( data > 20 )
 				ret = kIOReturnBadArgument;
 			else
 			{
