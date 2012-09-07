@@ -1,3 +1,5 @@
+# osx-pl2303
+
 This is a driver for the many-and-various Prolific PL2303 serial-to-USB
 adapters that are out there.  I didn't write it, nor did I even update
 it to work on Snow Leopard -- I just had the occasion one day to be
